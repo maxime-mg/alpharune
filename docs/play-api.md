@@ -1,24 +1,26 @@
-# riftbound — Web UI API
+# riftbound_play — Web UI API
 
-When the `riftbound` binary runs a single game with any seat set to
-`human` (or with `--web on`), it exposes a Boost.Beast HTTP + WebSocket
-server on `127.0.0.1:8080` so a human can drive their seat from a
-browser. Same binary, same flags as the CLI / batch modes — `--web`
-controls whether the server starts.
+When `riftbound_play` (built from `play/`) runs a game with any seat set
+to `human` (or with `--web on`), it exposes a Boost.Beast HTTP +
+WebSocket server on `127.0.0.1:8080` so a human can drive their seat
+from a browser. It takes the engine CLI's flags (`riftbound`, which has
+no human seats and no web UI) plus `--web-root`; `--web` controls
+whether the server starts.
 
-This document is the wire-protocol reference for that server. The
-browser frontend embedded in the binary (`src/io/play_index_html.cpp`)
-is the reference consumer, but any tool can speak this protocol.
+This document is the wire-protocol reference for that server. Two
+browser frontends consume it: the board at `/` (`play/web/`) and the
+older single-file page at `/classic` (`play/src/classic_page.cpp`). Any
+tool can speak the protocol.
 
 ---
 
 ## CLI
 
 ```text
-riftbound
+riftbound_play
     --deck1 PATH         # P1 deck list, .txt (required)
     --deck2 PATH         # P2 deck list, .txt (required)
-    --agent1 SPEC        # random (default) | human | mcts:sims=N | ismcts:sims=N
+    --agent1 SPEC        # human (default) | random | mcts:sims=N | ismcts:sims=N
     --agent2 SPEC        # random (default) | human | mcts:sims=N | ismcts:sims=N
     --web auto|on|off    # auto (default): ON iff any seat is human
     --port N             # default: 8080
@@ -33,9 +35,11 @@ riftbound
     --wild               # allow banned cards in decks
     --registry PATH      # deprecated/ignored (card data is compiled into the engine)
     --show-hand          # name facedown cards in renders; show every hand in the UI
+    --hot-seat           # two human seats share one screen instead of one seat per browser
+    --web-root DIR       # the board page; default: play/web in the source tree
 ```
 
-The defaults are random vs random, one game, no web UI. A value other
+The defaults are human (P1) vs random, one game, web UI on. A value other
 than `auto`, `on` or `off` for `--web`, `--god-mode` or `--render-html`
 is an error, as is `--web on` with `--games` above 1.
 
@@ -51,7 +55,9 @@ not to stdout). The HTML replay lands at
 
 | Path  | Method | Behaviour                                              |
 |-------|--------|--------------------------------------------------------|
-| `/`   | GET    | Serves the embedded single-page UI                     |
+| `/`   | GET    | The board page (`index.html` from `--web-root`)        |
+| `/<file>` | GET | Another file of `--web-root` by plain name (`board.js`, `board.css`) |
+| `/classic` | GET | The older embedded single-page UI                     |
 | `/ws` | GET    | WebSocket upgrade — bidirectional JSON message channel |
 
 Every request is checked before it is served:
@@ -65,8 +71,9 @@ Every request is checked before it is served:
 * **Access token.** When the server is bound to a non-loopback address
   (`--bind 0.0.0.0`), it generates a random token and prints the URL as
   `http://<addr>:<port>/?token=<token>`. Both `GET /` and the upgrade
-  (`/ws?token=<token>`) are refused with 403 without it. On loopback
-  there is no token.
+  (`/ws?token=<token>`) are refused with 403 without it (as is
+  `/classic`). The page's own files (`board.js`, `board.css`) carry no
+  game data and are served without it. On loopback there is no token.
 
 Requests that fail a check get `403 Forbidden`.
 
@@ -74,6 +81,22 @@ The token is the only authentication, and it travels in the URL over
 plain HTTP. Anyone who has it can play the game and, with god mode on,
 edit its state. Bind to something other than loopback only on a network
 you trust.
+
+---
+
+### Seats
+
+With two human seats (and no `--hot-seat`) the server is *seat-bound*:
+each client takes a seat with `{"type":"seat","player":"P1"}` (the
+board page sends it when its URL has `?seat=P1` or `?seat=P2`). The seat
+must be a human one that no other connected client holds; the reply is
+`{"type":"seat","ok":true|false,...}`. A client that takes no seat is a
+spectator. Each seat then gets its own frames (its own hand; options and
+prompt only while it is asked), and `your_seat` says which. A `choose`
+is accepted only from the client seated as the player it answers for.
+
+With one human seat, or `--hot-seat`, every client gets the same stream
+and may answer for the human seat; a `seat` message is refused.
 
 ---
 
@@ -145,6 +168,14 @@ Player2) is parked in `selectAction` waiting for input.
   than an opaque enum.
 * `legal[].type` is the action type stem ("PlayCard", "EndTurn", etc.)
   for client-side grouping.
+* `legal[].objects` lists every other object the intent names: targets,
+  chosen runes or units, units to move. The board uses it to link a
+  card to the options that use it.
+* `legal[].location` is where the option puts its card or units:
+  `{"base": "P1"}` or `{"battlefield": 0}`. It is a move's destination
+  or a play's location, and is absent for options that place nothing.
+  The board uses it for click-the-unit-then-click-the-destination.
+* `board` is the structured board the visual board draws; see below.
 * `zones.*` is included on every frame; the UI consumes it to populate
   the god-mode side panel. `base` lists the objects at that player's
   base; objects at a battlefield are under `battlefields[].units`. Each
@@ -179,6 +210,66 @@ Player2) is parked in `selectAction` waiting for input.
   decisions, `legal[].label` carries a meaningful option name (`Yes`,
   `No`, a mode label, an `X` value) rather than a bare index.
 * `spectator` — present in spectator mode; see the example at the end.
+
+### `board` — the per-seat board view
+
+Built by `buildBoardView(state, card_db, seat)` in
+`play/src/board_view.cpp`, with the same visibility as the frame's
+`zones` and `render_text`: `god` when the frame carries everything (god
+mode, no human seat, `--show-hand`), else the seat whose hand the frame
+shows (`p1` / `p2`; in hot-seat play, whoever is deciding), else
+`spectator`. It holds everything the visual board draws.
+
+```text
+board = {
+  viewer: "p1" | "p2" | "spectator" | "god",
+  viewer_player: "P1" | "P2" | null,
+  players: { P1: player, P2: player },
+  battlefields: [battlefield],
+  turn, chain: [chain_item] (newest first),
+  cost: cost | null               // a cost being paid right now
+}
+
+player = {
+  id, score, xp,
+  legend: object | null, champion: object | null,   // champion null once played
+  hand:      { count, cards?: [object] },            // cards for own seat and god
+  main_deck: { count, cards?: [object] },            // cards (top first) for god only
+  rune_deck: { count, cards?: [object] },            // god only
+  trash: [object], banishment: [object],             // public
+  base: [object],   // units and gear at base; attached gear sits on its host
+  runes: [object],  // runes on the board
+  pool: { energy, unit_energy, power: {Domain: n}, universal_power }
+}
+
+object = {
+  id, def_id, name, type, owner, controller, domains: [..],
+  keywords: [{name, value?}], exhausted, token, hidden,
+  attachments: [object],
+  energy_cost?, power_cost?, text?, image?, champion?,   // when it has a card definition
+  might?, base_might?, damage?, stunned?, buffs?, temp_might?, designation?,  // units
+  empowered?, rune_domains?
+}
+
+battlefield = {
+  id, name, card: object | null, controller, contested, contested_by, contributed_by,
+  is_token,
+  showdown: {staged, in_progress},
+  combat: {staged, in_progress, attacker, defender},
+  units: { P1: [object], P2: [object] },    // face-up units only
+  facedown: [object (hidden: true) | {back: true, controller}]
+}
+
+turn = { number, phase, turn_player, priority, focus, showdown, closed,
+         passed_priority: [..], passed_focus: [..], victory_score,
+         game_over, winner?, reason? }
+
+chain_item = { id, name, source: object | null, controller,
+               kind: "spell" | "permanent" | "ability" | "other",
+               status: "pending" | "finalized", targets: [{id, name}] }
+
+cost = { card, player, energy_remaining, power_remaining, power_domains, paying: "energy" | "power" }
+```
 
 ### `state`
 

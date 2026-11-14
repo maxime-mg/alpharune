@@ -3,7 +3,8 @@
 /// Boost.Beast HTTP + WebSocket server for the human-play web UI.
 ///
 /// The server has two responsibilities:
-///   1. Serve the embedded single-page HTML at GET /.
+///   1. Serve the board page from `web_root` at GET / (and its other
+///      files by name), and the older embedded page at GET /classic.
 ///   2. Accept WebSocket upgrades at GET /ws, then exchange JSON
 ///      messages with the browser to surface engine decisions and
 ///      accept human input.
@@ -83,6 +84,9 @@ struct PlayServerConfig {
     std::string version_tag;
     std::string build_date;
     uint64_t    seed = 0;
+
+    /// Directory holding index.html, board.js and board.css (play/web).
+    std::string web_root;
 
     /// Seat-bound sessions (plans/09 9.PP2). When true, every client is
     /// either seated or a spectator:

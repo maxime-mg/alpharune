@@ -9,7 +9,7 @@
 ///   - decisionId monotonically increases per decision
 ///   - waitForDecision unblocks when engine reaches a pause point
 
-#include "agents/human_agent.h"
+#include "human_agent.h"
 #include "core/intent.h"
 
 #include <gtest/gtest.h>

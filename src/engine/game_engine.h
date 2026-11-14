@@ -345,6 +345,10 @@ public:
     // Resolve whatever is on the chain (triggers queued by an event a test
     // raised outside a play), with priority passes and finalization as in a game.
     void testHook_runChain() { if (!state_.chain.items.empty()) runChain(); }
+    // The main-phase options `p` would be offered now.
+    std::vector<Intent> testHook_generateMainPhaseActions(PlayerId p) const {
+        return generateMainPhaseActions(p);
+    }
     // Install agents directly without going through run(). Required so
     // tests can exercise paths that invoke chain priority loops
     // (runChain → processFEPR → getAgent).

@@ -106,8 +106,9 @@ struct LegalActionDesc {
     ActionPlaySource play_source = ActionPlaySource::Hand;
     /// The play uses the card's alternative cost.
     bool alt_cost = false;
-    /// For Activate: the ability is one granted by another card (0 = own).
-    CardDefId granted_by = 0;
+    /// For Activate: the ability is one granted by another card (kInvalidId:
+    /// the card's own). `= 0` does not compile: 0 is not a card id literal.
+    CardDefId granted_by = kInvalidId;
 
     bool operator==(const LegalActionDesc&) const = default;
 };

@@ -33,7 +33,7 @@
 /// it rendered, so a click that arrives after the engine has moved on is
 /// dropped instead of answering a later, different question.
 
-#include "agent_interface.h"
+#include "agents/agent_interface.h"
 
 #include <atomic>
 #include <condition_variable>

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Riftbound Board</title>
+<link rel="stylesheet" href="board.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Riftbound</div>
+  <label class="seat">Seat
+    <select id="seat-select" aria-label="Seat">
+      <option value="auto">Auto</option>
+      <option value="P1">Player 1</option>
+      <option value="P2">Player 2</option>
+    </select>
+  </label>
+  <div id="turn-summary" class="turn-summary"></div>
+  <div class="spacer"></div>
+  <a class="link" href="/classic" target="_blank" rel="noopener">Classic page</a>
+  <span id="conn" class="conn conn-off">connecting</span>
+</header>
+
+<main class="layout">
+  <section id="board" class="board" aria-label="Board">
+    <div id="area-top" class="player-area top"></div>
+    <div id="battlefields" class="battlefields"></div>
+    <div id="area-bottom" class="player-area bottom"></div>
+  </section>
+
+  <aside class="side">
+    <section class="panel" id="turn-panel"></section>
+    <section class="panel" id="decision-panel">
+      <h2 id="decision-title">Actions</h2>
+      <div id="prompt" class="prompt" hidden></div>
+      <div id="actions" class="actions"></div>
+    </section>
+    <section class="panel" id="cost-panel" hidden></section>
+    <section class="panel">
+      <h2>Chain</h2>
+      <ol id="chain" class="chain"></ol>
+    </section>
+    <section class="panel" id="log-panel" hidden>
+      <h2>Engine log <span class="hint">(lines this view may read)</span></h2>
+      <div id="log" class="log"></div>
+    </section>
+    <section class="panel">
+      <label class="toggle"><input type="checkbox" id="text-toggle"> Text view</label>
+      <pre id="text-view" class="text-view" hidden></pre>
+    </section>
+  </aside>
+</main>
+
+<button id="jump-actions" class="jump" hidden>Your move ↓</button>
+<div id="tooltip" class="tooltip" hidden></div>
+<div id="modal" class="modal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-head"><h2 id="modal-title"></h2><button id="modal-close" aria-label="Close">×</button></div>
+    <div id="modal-body" class="modal-body"></div>
+  </div>
+</div>
+
+<script src="board.js"></script>
+</body>
+</html>

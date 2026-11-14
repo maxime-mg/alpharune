@@ -62,28 +62,28 @@ RIFTBOUND_ROOT=. ./build/riftbound_tests
     --deck2 decks/yi_rebuild.txt \
     --games 100 --threads 8
 
-# Play AS A HUMAN against MCTS-50 in your browser. The binary
-# auto-starts a Boost.Beast webserver on http://127.0.0.1:8080
+# Play AS A HUMAN against MCTS-50 in your browser. riftbound_play (built
+# from play/) starts a Boost.Beast webserver on http://127.0.0.1:8080
 # whenever any seat is human; trace logging + HTML replay are also
 # auto-enabled. Open the URL in any browser to play.
-./build/riftbound \
+./build/play/riftbound_play \
     --agent1 human --agent2 mcts:sims=50 \
     --deck1 decks/fiora.txt \
     --deck2 decks/yi_rebuild.txt
 
 # Want to play as P2 instead? Swap the seats:
-./build/riftbound \
+./build/play/riftbound_play \
     --agent1 mcts:sims=50 --agent2 human \
     --deck1 decks/fiora.txt \
     --deck2 decks/yi_rebuild.txt
 
 # Hot-seat (two humans in one browser tab, take turns):
-./build/riftbound --agent1 human --agent2 human \
+./build/play/riftbound_play --agent1 human --agent2 human \
     --deck1 decks/fiora.txt \
     --deck2 decks/yi_rebuild.txt
 
 # Spectator (force the web UI ON for an AI-vs-AI game):
-./build/riftbound --agent1 random --agent2 mcts:sims=20 --web on \
+./build/play/riftbound_play --agent1 random --agent2 mcts:sims=20 --web on \
     --deck1 decks/fiora.txt \
     --deck2 decks/yi_rebuild.txt
 ```
@@ -97,13 +97,13 @@ The fastest way to play a game yourself, as Player 1, against a
 50-simulation MCTS bot:
 
 ```bash
-./build/riftbound \
+./build/play/riftbound_play \
     --agent1 human --agent2 mcts:sims=50 \
     --deck1 decks/fiora.txt \
     --deck2 decks/yi_rebuild.txt
 ```
 
-Because a seat is `human`, the binary auto-starts a small Boost.Beast
+Because a seat is `human`, `riftbound_play` starts a small Boost.Beast
 web server and prints a URL:
 
 ```
@@ -119,7 +119,8 @@ Useful flags:
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--agent1` / `--agent2` | `random` | Per-seat agent: `human`, `random`, `mcts:sims=N`, `ismcts:sims=N`. |
+| `--agent1` / `--agent2` | `human` / `random` | Per-seat agent: `human`, `random`, `mcts:sims=N`, `ismcts:sims=N`. |
+| `--web-root` | `play/web` | Directory of the board page served at `/`. The older single-file page is at `/classic`. |
 | `--web` | `auto` | `auto` starts the UI whenever a seat is human; `on` forces it (spectate AI-vs-AI); `off` disables it. |
 | `--port` / `--bind` | `8080` / `127.0.0.1` | Where the UI listens. Use `--bind 0.0.0.0` to reach it from another machine: the printed URL then carries an access token that the server requires. |
 | `--god-mode` | `auto` | `auto`/`on` enables the in-browser state editor when a human is seated. While it is on the UI shows every hand and deck. `off` hides the editor **and** the opponent's hand and both decks' order, for a fair game. |
@@ -128,7 +129,11 @@ Useful flags:
 
 ### What the UI looks like
 
-The page is a single resizable dashboard (drag the dividers between
+`/` is the visual board (`play/web/`): every zone drawn as cards; click a
+card to play or move it, then click where it goes. See
+[`docs/phase1-visual-board.md`](docs/phase1-visual-board.md).
+
+The older page at `/classic` is a single resizable dashboard (drag the dividers between
 panels to resize):
 
 - **Header** — engine version + build, the game seed, and a live
@@ -164,7 +169,9 @@ underlying WebSocket protocol is in [`docs/play-api.md`](docs/play-api.md).
 
 | Binary | Purpose |
 |---|---|
-| `build/riftbound` | Unified game runner. All modes (single / batch / web UI / spectator), all agents (`random` / `human` / `mcts:sims=N` / `ismcts:sims=N`), HTML replay, trace/debug logging — all driven by CLI flags. |
+| `build/riftbound` | The engine's game runner: single games and batches between engine agents (`random` / `random-player` / `mcts:sims=N` / `ismcts:sims=N`), HTML replay, trace/debug logging. |
+| `build/play/riftbound_play` | The browser app (`play/`): the same runner plus `human` seats, the web UI and spectator mode. Configure with `-DRIFTBOUND_BUILD_PLAY=OFF` to build the engine without it. |
+| `build/play/riftbound_play_tests` | Tests for the play layer (server protocol, seats, board view, HumanAgent). |
 | `build/riftbound_tests` | Google Test suite. |
 | `build/src/openspiel/riftbound_clone_equiv_test` | Validates Clone() correctness — clones mid-game, runs the same actions on original + clone, asserts identical terminal state. |
 | `build/src/openspiel/riftbound_clone_microbench` | Microbenchmark — times Clone() throughput. |
@@ -220,9 +227,11 @@ src/cards/       Card subclasses — one TU per card under units/ spells/ gear/
                  their type dir (gear/equip_base.h, units/weaponmaster_base.h);
                  cross-cutting helpers in card_helpers.h; cards_init.cpp is the
                  checked-in registration aggregator (one line per card).
-src/agents/      AgentInterface + RandomAgent + HumanAgent
-src/io/          HTML replay writer, ASCII state renderer, play server
-                 (web UI) and its god-mode state editor
+src/agents/      AgentInterface + RandomAgent + search agents
+src/io/          HTML replay writer, ASCII state renderer, god-mode
+                 state editor
+play/            The browser app: play server, HumanAgent, board view,
+                 web client (play/web), riftbound_play and its tests
 src/openspiel/   OpenSpiel Game / State subclasses, action vocabulary,
                  clone-correctness tests
 src/ml/          Engine-side shared infra: feature extractor +

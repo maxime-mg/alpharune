@@ -473,10 +473,6 @@ add_library(riftbound_core
     src/io/state_renderer.cpp
     src/io/replay_writer.cpp
     src/io/state_editor.cpp
-    # The web UI server. In the library (not only in the `riftbound` binary)
-    # so tests link it instead of #including the .cpp files.
-    src/io/play_server.cpp
-    src/io/play_index_html.cpp
     src/cards/card.cpp
     src/cards/card_registry.cpp
     src/cards/cards_init.cpp
@@ -506,9 +502,9 @@ target_link_libraries(riftbound_core PUBLIC ${RIFTBOUND_CORE_LIBS})
 # target_link_libraries(riftbound_engine PUBLIC riftbound_core)
 
 # ─── Unified riftbound binary ────────────────────────────────────────────────
-# One entry point for all modes: random / mcts / ismcts / human (1 or 2 seats),
-# single-game or batch via --games, optional Beast HTTP+WebSocket web UI via
-# --web. Pulls in OpenSpiel + the riftbound_game/state TUs so MctsAgent /
+# The engine's command-line binary: random / mcts / ismcts agents, single-game
+# or batch via --games. Human play in the browser is the separate play/ app
+# (riftbound_play), added at the end of this file. Pulls in OpenSpiel + the riftbound_game/state TUs so MctsAgent /
 # IsMctsAgent can construct cloneable OpenSpiel states internally.
 #
 # The riftbound_game.cpp + riftbound_state.cpp sources MUST be compiled into
@@ -734,7 +730,7 @@ endforeach()
 add_test(NAME riftbound_one_card_table
     COMMAND riftbound --deck1 decks/yi_rebuild.txt --deck2 decks/fiora.txt
             --agent1 mcts:sims=2 --agent2 ismcts:sims=2 --seed 7 --debug
-            --render-html off --web off
+            --render-html off
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 set_tests_properties(riftbound_one_card_table PROPERTIES
     ENVIRONMENT "RIFTBOUND_ROOT=${PROJECT_SOURCE_DIR}"
@@ -761,3 +757,11 @@ target_link_libraries(balance PRIVATE
 )
 target_include_directories(balance PRIVATE ${open_spiel_SOURCE_DIR})
 riftbound_enable_warnings(balance)
+
+# ─── Play app (browser UI) ───────────────────────────────────────────────────
+# Lives in play/ and depends on the engine; the engine never depends on it.
+# -DRIFTBOUND_BUILD_PLAY=OFF builds the engine, its binary and its tests alone.
+option(RIFTBOUND_BUILD_PLAY "Build the riftbound_play browser app in play/" ON)
+if(RIFTBOUND_BUILD_PLAY)
+    add_subdirectory(play)
+endif()

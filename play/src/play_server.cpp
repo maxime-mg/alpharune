@@ -1,10 +1,12 @@
 #include "play_server.h"
-#include "play_index_html.h"
-#include "replay_writer.h"
-#include "state_editor.h"
-#include "state_renderer.h"
+#include "board_view.h"
+#include "classic_page.h"
+#include "human_agent.h"
 
-#include "agents/human_agent.h"
+#include "io/replay_writer.h"
+#include "io/state_editor.h"
+#include "io/state_renderer.h"
+
 #include "core/card_db.h"
 #include "core/game_state.h"
 #include "core/intent.h"
@@ -25,7 +27,12 @@
 #include <chrono>
 #include <condition_variable>
 #include <csignal>
+#include <cctype>
 #include <deque>
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <sstream>
 #include <iostream>
 #include <limits>
 #include <list>
@@ -295,6 +302,7 @@ public:
         ws_.set_option(ws::stream_base::decorator(
             [](ws::response_type& res) {
                 res.set(http::field::server, "riftbound_play");
+        res.set(http::field::cache_control, "no-store");
             }));
         auto self = shared_from_this();
         ws_.async_accept(req,
@@ -620,6 +628,32 @@ private:
 
 // ─── HTTP-then-WS routing ───────────────────────────────────────────────────
 
+/// Reads one file from the web root. Only plain names directly under the
+/// root are served ("/board.js"), so a request cannot climb out of it.
+bool readWebFile(const std::string& root, const std::string& path,
+                 std::string& body, std::string& type) {
+    if (root.empty() || path.size() < 2 || path[0] != '/') return false;
+    const std::string name = path.substr(1);
+    for (char ch : name)
+        if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '.' || ch == '-' || ch == '_'))
+            return false;
+    if (name.find("..") != std::string::npos) return false;
+    std::ifstream f(std::filesystem::path(root) / name, std::ios::binary);
+    if (!f) return false;
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    body = ss.str();
+    static const std::map<std::string, std::string> kTypes = {
+        {".html", "text/html; charset=utf-8"}, {".js", "text/javascript; charset=utf-8"},
+        {".css", "text/css; charset=utf-8"},   {".svg", "image/svg+xml"},
+        {".png", "image/png"},                  {".json", "application/json"},
+    };
+    const auto dot = name.rfind('.');
+    const auto it = dot == std::string::npos ? kTypes.end() : kTypes.find(name.substr(dot));
+    type = it == kTypes.end() ? "application/octet-stream" : it->second;
+    return true;
+}
+
 class HttpSession : public std::enable_shared_from_this<HttpSession> {
 public:
     HttpSession(tcp::socket socket, PlayServer::Impl& impl, PlayServer& server)
@@ -651,7 +685,12 @@ private:
             return respond(http::status::forbidden, "text/plain",
                            "Forbidden: unexpected Host header");
         }
-        if (!cfg.access_token.empty() && !queryHasToken(query, cfg.access_token)) {
+        // The page's own files (board.js, board.css) carry no game data and
+        // are requested without the query string, so only the pages and the
+        // WebSocket need the token.
+        const bool needs_token = ws::is_upgrade(req_) || path == "/" || path == "/classic" ||
+                                 path == "/index.html";
+        if (needs_token && !cfg.access_token.empty() && !queryHasToken(query, cfg.access_token)) {
             return respond(http::status::forbidden, "text/plain",
                            "Forbidden: missing or wrong access token");
         }
@@ -670,9 +709,18 @@ private:
             session->run(std::move(req_));
             return;
         }
-        // Otherwise: serve embedded index for GET /, 404 elsewhere.
-        if (req_.method() == http::verb::get && path == "/") {
+        // Otherwise: the board from the web root, the embedded classic page
+        // at /classic, 404 elsewhere.
+        std::string body, type;
+        if (req_.method() != http::verb::get) {
+            respond(http::status::method_not_allowed, "text/plain", "Method Not Allowed");
+        } else if (path == "/classic" ||
+                   (path == "/" && !readWebFile(cfg.web_root, "/index.html", body, type))) {
+            // The embedded page: asked for, or the board page is not there
+            // (no --web-root, as in the tests).
             respond(http::status::ok, "text/html; charset=utf-8", impl_.index_html);
+        } else if (readWebFile(cfg.web_root, path == "/" ? "/index.html" : path, body, type)) {
+            respond(http::status::ok, type.c_str(), std::move(body));
         } else {
             respond(http::status::not_found, "text/plain", "Not Found");
         }
@@ -684,6 +732,7 @@ private:
         res.set(http::field::content_type, content_type);
         res.body() = std::move(body);
         res.set(http::field::server, "riftbound_play");
+        res.set(http::field::cache_control, "no-store");
         res.prepare_payload();
         auto self = shared_from_this();
         auto sp = std::make_shared<http::response<http::string_body>>(std::move(res));
@@ -779,6 +828,30 @@ json buildLegalActionJson(const CardDB& db,
         };
         if (a.card != kInvalidId) item["card_object_id"] = static_cast<int>(a.card.raw());
         if (a.ability_source != kInvalidId) item["ability_source"] = static_cast<int>(a.ability_source.raw());
+        // Every other object the intent names (targets, chosen runes or
+        // units, units to move), so the board can link a card to the
+        // options that use it. Options only reach the seat being asked.
+        json objects = json::array();
+        auto addObj = [&](GameObjectId id) {
+            if (id == kInvalidId || id == a.card || id == a.ability_source) return;
+            const int raw = static_cast<int>(id.raw());
+            for (const auto& o : objects) if (o.get<int>() == raw) return;
+            objects.push_back(raw);
+        };
+        for (auto id : a.targets) addObj(id);
+        for (auto id : a.chosen_objects) addObj(id);
+        for (auto id : a.units_to_move) addObj(id);
+        if (!objects.empty()) item["objects"] = std::move(objects);
+        // Where the option puts its card or units: a move's destination or
+        // a play's location. The board lets a player click the destination.
+        const auto& loc = a.move_destination ? a.move_destination : a.play_location;
+        if (loc) {
+            if (std::holds_alternative<BaseLocation>(*loc))
+                item["location"] = {{"base", playerToStr(std::get<BaseLocation>(*loc).player)}};
+            else
+                item["location"] = {{"battlefield",
+                                     static_cast<int>(std::get<BattlefieldLocation>(*loc).id.raw())}};
+        }
         arr.push_back(std::move(item));
     }
     return arr;
@@ -956,6 +1029,13 @@ json PlayServer::Impl::buildSnapshotLocked(const Park& /*park*/, const RenderVis
         {"P2", buildZoneJson(parent.card_db_, st, PlayerId::Player2, vis.p2, cfg.reveal_hidden)},
     };
     snap["battlefields"] = buildBattlefieldsJson(parent.card_db_, st);
+    // The structured board (board_view.h): god when hidden information is
+    // revealed, else the seat whose hand this view shows (none: spectator).
+    const Seat board_seat = cfg.reveal_hidden ? Seat::God
+        : vis.p1 && !vis.p2 ? Seat::Player1
+        : vis.p2 && !vis.p1 ? Seat::Player2
+        : vis.p1 && vis.p2  ? Seat::God : Seat::Spectator;
+    snap["board"] = buildBoardView(st, parent.card_db_, board_seat);
     // Phase name string — int-only was a UX miss, the integer phase
     // tells the user nothing without a CR cross-reference.
     const char* phase_name = "?";
@@ -1306,7 +1386,7 @@ std::string PlayServer::start() {
 
     // Build the served HTML once; reused across all GET /.
     const auto& images = ReplayWriter::loadCardImageMap();
-    impl_->index_html = buildPlayIndexHtml(
+    impl_->index_html = buildClassicPageHtml(
         images, config_.version_tag, config_.build_date, config_.seed,
         config_.god_mode_enabled);
 

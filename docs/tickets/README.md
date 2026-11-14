@@ -6,6 +6,8 @@ Priorities: **P0** now, **P1** next, **P2** after that, **P3** later. The list b
 
 Source documents: [ui-roadmap.md](../ui-roadmap.md) and [card-status](../card-status/README.md). Card tickets were generated once, on 2026-11-06, from `docs/card-status/card-status.csv` and the card text. Edit them by hand from now on; rerunning `scripts/card_status.py` does not update them.
 
+> **Written against `b05e51d` (2026-10-10), before the rebase onto upstream `ec90f0f`.** Upstream's 947 newer commits implemented ENG-002 (group moves) and work that overlaps PLAY-002, PLAY-004 and PLAY-005 (seat-bound sessions, fair-play frames, `decision_id` checks), and fixed many cards. Check a ticket against the current code before starting it; `docs/card-status/` also needs regenerating. See section 7 of [phase1-visual-board.md](../phase1-visual-board.md).
+
 ## Working order
 
 | # | Ticket | Priority | Area | Status | Depends on |
