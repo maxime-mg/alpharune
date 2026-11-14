@@ -9,8 +9,7 @@ std::vector<GameObjectId> BattlefieldState::unitsControlledBy(
     const std::unordered_map<GameObjectId, GameObject>& objects) const {
     std::vector<GameObjectId> result;
     for (auto& [oid, obj] : objects) {
-        if (obj.isUnit() && obj.controller == player &&
-            obj.zone == ZoneType::Base && obj.isAtBattlefield()) {
+        if (obj.isUnit() && obj.controller == player && obj.isAtBattlefield()) {
             auto bf_id = obj.battlefieldId();
             if (bf_id && *bf_id == id) {
                 result.push_back(oid);

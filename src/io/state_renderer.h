@@ -49,6 +49,12 @@ public:
     // Configuration
     int max_width = 80;
     bool show_hand = false;        // show hand contents (debug only)
+    /// When set, hands are printed only for `hand_viewer`; every other
+    /// hand shows its size. A per-seat view sets this (PlayerId::None
+    /// hides both hands, for a spectator). Off by default: logs, replays
+    /// and the CLI keep printing both hands.
+    bool hide_other_hands = false;
+    PlayerId hand_viewer = PlayerId::None;
     bool show_legal_actions = true;
 
 private:

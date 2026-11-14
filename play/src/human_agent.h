@@ -26,7 +26,7 @@
 /// only one choice is meaningful per decision (last writer wins
 /// before the engine wakes).
 
-#include "agent_interface.h"
+#include "agents/agent_interface.h"
 
 #include <atomic>
 #include <condition_variable>

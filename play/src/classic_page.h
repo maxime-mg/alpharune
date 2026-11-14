@@ -19,7 +19,7 @@
 
 namespace riftbound {
 
-std::string buildPlayIndexHtml(
+std::string buildClassicPageHtml(
     const std::map<std::string, std::string>& card_images,
     std::string_view version_tag,
     std::string_view build_date,

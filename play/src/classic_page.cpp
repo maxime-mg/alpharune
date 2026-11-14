@@ -1,4 +1,4 @@
-#include "play_index_html.h"
+#include "classic_page.h"
 
 #include <nlohmann/json.hpp>
 
@@ -892,7 +892,7 @@ const CARD_IMAGES = /*__RIFTBOUND_CARD_IMAGES__*/;
 
 } // namespace
 
-std::string buildPlayIndexHtml(
+std::string buildClassicPageHtml(
     const std::map<std::string, std::string>& card_images,
     std::string_view version_tag,
     std::string_view build_date,

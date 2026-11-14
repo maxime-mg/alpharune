@@ -209,6 +209,9 @@ public:
         return resolveShowdownDecision(bf, chosen, current_focus, action_count);
     }
     void testHook_executeIntent(const Intent& i) { executeIntent(i); }
+    std::vector<Intent> testHook_generateMainPhaseActions(PlayerId p) const {
+        return generateMainPhaseActions(p);
+    }
     // Install agents directly without going through run(). Required so
     // tests can exercise paths that invoke chain priority loops
     // (runChain → processFEPR → getAgent).
@@ -494,6 +497,18 @@ private:
     void executePlayCard(const Intent& intent);
     void executePlaySpell(const Intent& intent);
     void executeStandardMove(const Intent& intent);
+    // CR 144.3 group moves. The first unit comes from a generated
+    // single-unit StandardMove; the rest are added one per decision
+    // through state_.move_cursor before anything moves.
+    std::vector<Intent> moveGroupOptions() const;
+    void finishMoveGroup();
+    void performStandardMove(PlayerId player, LocationId dest,
+                             const std::vector<GameObjectId>& units);
+    void appendStandardMoves(PlayerId player, std::vector<Intent>& actions) const;
+    std::vector<GameObjectId> unitPlaySources(PlayerId player) const;
+    void appendUnitPlayLocations(PlayerId player, const Intent& play,
+                                 bool allow_paid_locations,
+                                 std::vector<Intent>& actions) const;
     void executeEndTurn(const Intent& intent);
     void executeMulligan(const Intent& intent);
     void executeAssignCombatDamage(const Intent& intent);

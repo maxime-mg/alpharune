@@ -316,9 +316,11 @@ bool ChainManager::stepExecuteAndPass(AgentQuery query_agent,
                 card.is_hidden = false;
                 card.hidden_at = kInvalidId;
             } else {
-                // Normal reaction from hand
+                // Normal reaction from hand, or the Chosen Champion from
+                // the Champion Zone.
                 auto it = std::find(ps.hand.begin(), ps.hand.end(), chosen.card);
                 if (it != ps.hand.end()) ps.hand.erase(it);
+                if (ps.champion_zone == chosen.card) ps.champion_zone = kInvalidId;
 
                 // Pay cost
                 if (pay_cost_) {

@@ -1,10 +1,11 @@
 #include "play_server.h"
-#include "play_index_html.h"
-#include "replay_writer.h"
-#include "state_editor.h"
-#include "state_renderer.h"
+#include "board_view.h"
+#include "classic_page.h"
+#include "human_agent.h"
 
-#include "agents/human_agent.h"
+#include "io/replay_writer.h"
+#include "io/state_editor.h"
+#include "io/state_renderer.h"
 #include "core/card_db.h"
 #include "core/game_state.h"
 #include "core/intent.h"
@@ -21,9 +22,14 @@
 #include <boost/asio/post.hpp>
 #include <nlohmann/json.hpp>
 
+#include <cctype>
 #include <chrono>
 #include <csignal>
 #include <deque>
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <sstream>
 #include <iostream>
 #include <list>
 #include <memory>
@@ -130,7 +136,42 @@ struct PlayServer::Impl {
     std::mutex prompt_mu;
     std::string last_prompt;
 
-    explicit Impl(PlayServer& p) : parent(p) {}
+    // Text view for every seat but god: StateRenderer::show_hand also
+    // names face-down cards, so only the god seat gets the caller's
+    // renderer (which may have show_hand on). Each seat prints only its
+    // own hand; the spectator's prints neither.
+    StateRenderer p1_renderer, p2_renderer, spectator_renderer;
+
+    explicit Impl(PlayServer& p)
+        : parent(p), p1_renderer(p.card_db_), p2_renderer(p.card_db_), spectator_renderer(p.card_db_) {
+        for (auto* r : {&p1_renderer, &p2_renderer, &spectator_renderer}) r->hide_other_hands = true;
+        p1_renderer.hand_viewer = PlayerId::Player1;
+        p2_renderer.hand_viewer = PlayerId::Player2;
+    }
+
+    const StateRenderer& rendererFor(Seat seat) const {
+        switch (seat) {
+            case Seat::God:       return parent.renderer_;
+            case Seat::Player1:   return p1_renderer;
+            case Seat::Player2:   return p2_renderer;
+            case Seat::Spectator: return spectator_renderer;
+        }
+        return spectator_renderer;
+    }
+
+    /// Seat for a new connection, from the `seat` query parameter.
+    /// No parameter (the classic page): god when god mode is on, else spectator.
+    /// "auto": the only human seat, P1 when both are human, else spectator.
+    /// "god" without god mode falls back to spectator.
+    Seat resolveSeat(const std::string& target) const;
+
+    /// Seats that are human, for the client's seat picker.
+    json humanSeats() const;
+
+    /// The decision or state frame as `seat` may see it.
+    std::string frameFor(Seat seat, PlayerId active_player,
+                         const std::vector<Intent>& legal, uint64_t decision_id,
+                         bool at_decision, const std::string& prompt);
 
     void broadcastDecisionFrame();
     void runWatcher();
@@ -142,8 +183,10 @@ namespace {
 
 class WsSession : public std::enable_shared_from_this<WsSession> {
 public:
-    WsSession(tcp::socket socket, PlayServer::Impl& server_impl, PlayServer& server)
-        : ws_(std::move(socket)), impl_(server_impl), server_(server) {}
+    WsSession(tcp::socket socket, PlayServer::Impl& server_impl, PlayServer& server, Seat seat)
+        : ws_(std::move(socket)), impl_(server_impl), server_(server), seat_(seat) {}
+
+    Seat seat() const { return seat_; }
 
     void run(http::request<http::string_body> req) {
         ws_.set_option(ws::stream_base::timeout::suggested(beast::role_type::server));
@@ -214,6 +257,12 @@ private:
         auto player_str = m.value("player", "");
         PlayerId pid = strToPlayer(player_str);
         int idx = m.value("index", -1);
+        // A seat may only answer for itself; god may answer for either.
+        if (seat_ != Seat::God && seatPlayer(seat_) != pid) {
+            send(json{{"type", "err"}, {"msg", std::string("seat ") + seatName(seat_) +
+                                               " cannot choose for " + player_str}}.dump());
+            return;
+        }
         HumanAgent* agent = nullptr;
         if (pid == PlayerId::Player1) agent = server_.config_p1();
         if (pid == PlayerId::Player2) agent = server_.config_p2();
@@ -231,6 +280,10 @@ private:
     bool requireGodMode() {
         if (!server_.godModeEnabled()) {
             send(json{{"type", "edit_err"}, {"msg", "god mode disabled (no human seat)"}}.dump());
+            return false;
+        }
+        if (seat_ != Seat::God) {
+            send(json{{"type", "edit_err"}, {"msg", "edits need the god seat"}}.dump());
             return false;
         }
         return true;
@@ -349,9 +402,36 @@ private:
     beast::flat_buffer           read_buf_;
     std::deque<std::string>      queue_;
     bool                         writing_ = false;
+    Seat                         seat_;
 };
 
 // ─── HTTP-then-WS routing ───────────────────────────────────────────────────
+
+/// Reads one file from the web root. Only plain names directly under the
+/// root are served ("/board.js"), so a request cannot climb out of it.
+bool readWebFile(const std::string& root, const std::string& path,
+                 std::string& body, std::string& type) {
+    if (root.empty() || path.size() < 2 || path[0] != '/') return false;
+    const std::string name = path.substr(1);
+    for (char c : name)
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_'))
+            return false;
+    if (name.find("..") != std::string::npos) return false;
+    std::ifstream f(std::filesystem::path(root) / name, std::ios::binary);
+    if (!f) return false;
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    body = ss.str();
+    static const std::map<std::string, std::string> kTypes = {
+        {".html", "text/html; charset=utf-8"}, {".js", "text/javascript; charset=utf-8"},
+        {".css", "text/css; charset=utf-8"},   {".svg", "image/svg+xml"},
+        {".png", "image/png"},                  {".json", "application/json"},
+    };
+    const auto dot = name.rfind('.');
+    const auto it = dot == std::string::npos ? kTypes.end() : kTypes.find(name.substr(dot));
+    type = it == kTypes.end() ? "application/octet-stream" : it->second;
+    return true;
+}
 
 class HttpSession : public std::enable_shared_from_this<HttpSession> {
 public:
@@ -376,7 +456,8 @@ private:
     void onRequest() {
         if (ws::is_upgrade(req_)) {
             // Hand off to a WsSession that owns the socket.
-            auto session = std::make_shared<WsSession>(std::move(socket_), impl_, server_);
+            const Seat seat = impl_.resolveSeat(std::string(req_.target()));
+            auto session = std::make_shared<WsSession>(std::move(socket_), impl_, server_, seat);
             {
                 std::lock_guard<std::mutex> lock(impl_.sessions_mu);
                 impl_.sessions.push_back(session);
@@ -384,12 +465,25 @@ private:
             session->run(std::move(req_));
             return;
         }
-        // Otherwise: serve embedded index for GET /, 404 elsewhere.
+        // Otherwise: the board from the web root, the classic page at
+        // /classic, 404 elsewhere.
         http::response<http::string_body> res;
-        if (req_.method() == http::verb::get && req_.target() == "/") {
+        std::string path(req_.target());
+        if (auto q = path.find('?'); q != std::string::npos) path.resize(q);
+        std::string body, type;
+        if (req_.method() != http::verb::get) {
+            res.result(http::status::method_not_allowed);
+            res.set(http::field::content_type, "text/plain");
+            res.body() = "Method Not Allowed";
+        } else if (path == "/classic") {
             res.result(http::status::ok);
             res.set(http::field::content_type, "text/html; charset=utf-8");
             res.body() = impl_.index_html;
+        } else if (readWebFile(server_.webRoot(), path == "/" ? "/index.html" : path, body, type)) {
+            res.result(http::status::ok);
+            res.set(http::field::content_type, type);
+            res.set(http::field::cache_control, "no-store");
+            res.body() = std::move(body);
         } else {
             res.result(http::status::not_found);
             res.set(http::field::content_type, "text/plain");
@@ -491,6 +585,31 @@ json buildLegalActionJson(const CardDB& db,
         };
         if (a.card != kInvalidId) item["card_object_id"] = static_cast<int>(a.card);
         if (a.ability_source != kInvalidId) item["ability_source"] = static_cast<int>(a.ability_source);
+        // Every other object the intent names (targets, chosen runes or
+        // units, units to move), so the board can link a card to the
+        // options that use it. Hidden objects only reach the seat that
+        // may see them: legal options go to the deciding seat alone.
+        json objects = json::array();
+        auto addObj = [&](GameObjectId id) {
+            if (id == kInvalidId || id == a.card || id == a.ability_source) return;
+            for (const auto& o : objects) if (o.get<int>() == static_cast<int>(id)) return;
+            objects.push_back(static_cast<int>(id));
+        };
+        for (auto id : a.targets) addObj(id);
+        for (auto id : a.chosen_objects) addObj(id);
+        for (auto id : a.units_to_move) addObj(id);
+        if (!objects.empty()) item["objects"] = std::move(objects);
+        // Where the option puts its card or units: a move's destination or
+        // a play's location. The board uses it to let a player click the
+        // destination instead of reading button labels.
+        const auto& loc = a.move_destination ? a.move_destination : a.play_location;
+        if (loc) {
+            if (std::holds_alternative<BaseLocation>(*loc))
+                item["location"] = {{"base", toString(std::get<BaseLocation>(*loc).player)}};
+            else
+                item["location"] = {{"battlefield",
+                                     static_cast<int>(std::get<BattlefieldLocation>(*loc).id)}};
+        }
         arr.push_back(std::move(item));
     }
     return arr;
@@ -513,13 +632,19 @@ json objToJson(const CardDB& db, const GameState& state, GameObjectId oid) {
     };
 }
 
-json buildZoneJson(const CardDB& db, const GameState& state, PlayerId pid) {
+// Legacy zone summary for the classic page. Private zones are filtered by
+// seat the same way as board_view: hands for their owner, deck contents
+// for god only. The board itself comes from buildBoardView.
+json buildZoneJson(const CardDB& db, const GameState& state, PlayerId pid, Seat seat) {
     const auto& ps = state.player(pid);
+    const bool god = seat == Seat::God;
+    const bool own = god || seatPlayer(seat) == pid;
     auto vecToJson = [&](const std::vector<GameObjectId>& v) {
         json a = json::array();
         for (auto oid : v) a.push_back(objToJson(db, state, oid));
         return a;
     };
+    static const std::vector<GameObjectId> kNone;
 
     // Sweep all GameObjects for ones at this player's base. Battlefield
     // units live in a separate per-BF bucket — see buildBattlefieldsJson.
@@ -533,9 +658,12 @@ json buildZoneJson(const CardDB& db, const GameState& state, PlayerId pid) {
     }
 
     json z = {
-        {"hand",       vecToJson(ps.hand)},
-        {"main_deck",  vecToJson(ps.main_deck)},
-        {"rune_deck",  vecToJson(ps.rune_deck)},
+        {"hand",       vecToJson(own ? ps.hand : kNone)},
+        {"main_deck",  vecToJson(god ? ps.main_deck : kNone)},
+        {"rune_deck",  vecToJson(god ? ps.rune_deck : kNone)},
+        {"hand_count",      ps.hand.size()},
+        {"main_deck_count", ps.main_deck.size()},
+        {"rune_deck_count", ps.rune_deck.size()},
         {"trash",      vecToJson(ps.trash)},
         {"banishment", vecToJson(ps.banishment)},
         {"base",       std::move(base)},
@@ -555,6 +683,7 @@ json buildBattlefieldsJson(const CardDB& db, const GameState& state) {
             if (!obj.location.has_value()) continue;
             if (!std::holds_alternative<BattlefieldLocation>(*obj.location)) continue;
             if (std::get<BattlefieldLocation>(*obj.location).id != bf.id) continue;
+            if (obj.is_hidden) continue;  // face-down: only in the board view, per seat
             units.push_back(objToJson(db, state, oid));
         }
         std::string controller_str = "none";
@@ -582,16 +711,131 @@ json buildBattlefieldsJson(const CardDB& db, const GameState& state) {
 
 } // namespace
 
-void PlayServer::Impl::broadcastDecisionFrame() {
-    PlayerId active_player = PlayerId::None;
-    std::vector<Intent> legal;
-    std::string render_text;
-    uint64_t decision_id = 0;
-    bool at_decision = false;
+Seat PlayServer::Impl::resolveSeat(const std::string& target) const {
+    const bool god_ok = parent.config_.god_mode_enabled;
+    std::string want;
+    if (auto q = target.find('?'); q != std::string::npos) {
+        std::string query = target.substr(q + 1);
+        std::stringstream ss(query);
+        for (std::string kv; std::getline(ss, kv, '&');)
+            if (kv.rfind("seat=", 0) == 0) want = kv.substr(5);
+    }
+    if (want.empty()) return god_ok ? Seat::God : Seat::Spectator;
+    if (want == "auto") {
+        const bool h1 = parent.config_.p1_human != nullptr;
+        const bool h2 = parent.config_.p2_human != nullptr;
+        if (h1) return Seat::Player1;
+        if (h2) return Seat::Player2;
+        return Seat::Spectator;
+    }
+    auto seat = parseSeat(want);
+    if (!seat) return Seat::Spectator;
+    if (*seat == Seat::God && !god_ok) return Seat::Spectator;
+    return *seat;
+}
 
-    // Snapshot under the state mutex so an in-flight edit can't tear.
+json PlayServer::Impl::humanSeats() const {
+    json a = json::array();
+    if (parent.config_.p1_human) a.push_back("p1");
+    if (parent.config_.p2_human) a.push_back("p2");
+    return a;
+}
+
+namespace {
+const char* phaseShortName(TurnPhase p) {
+    switch (p) {
+        case TurnPhase::Setup:           return "Setup";
+        case TurnPhase::Mulligan:        return "Mulligan";
+        case TurnPhase::AwakenPhase:     return "Awaken";
+        case TurnPhase::BeginningStep:   return "Beginning";
+        case TurnPhase::ScoringStep:     return "Scoring";
+        case TurnPhase::ChannelPhase:    return "Channel";
+        case TurnPhase::DrawPhase:       return "Draw";
+        case TurnPhase::MainPhase:       return "Main";
+        case TurnPhase::EndingStep:      return "Ending";
+        case TurnPhase::ExpirationStep:  return "Expiration";
+        default:                         return "?";
+    }
+}
+}  // namespace
+
+// Called with state_mutex_ held.
+std::string PlayServer::Impl::frameFor(Seat seat, PlayerId active_player,
+                                       const std::vector<Intent>& legal,
+                                       uint64_t decision_id, bool at_decision,
+                                       const std::string& prompt) {
+    const auto& st = parent.engine_.state();
+    // Only the deciding seat (or god) sees the options: their labels can
+    // name cards in that player's hand.
+    const bool mine = at_decision && (seat == Seat::God || seatPlayer(seat) == active_player);
+    static const std::vector<Intent> kNoActions;
+    const auto& renderer = rendererFor(seat);
+
+    json frame = {
+        {"type", mine ? "decision" : "state"},
+        {"decision_id", decision_id},
+        {"player", playerToStr(active_player)},
+        {"waiting_for", at_decision ? json(playerToStr(active_player)) : json(nullptr)},
+        {"seat", seatName(seat)},
+        {"human_seats", humanSeats()},
+        {"render_text", renderer.render(st)},
+        {"god_mode", parent.config_.god_mode_enabled},
+        {"version", parent.config_.version_tag},
+        {"seed", parent.config_.seed},
+    };
+    frame["legal"] = buildLegalActionJson(parent.card_db_, renderer, st, mine ? legal : kNoActions);
+    frame["zones"] = {
+        {"P1", buildZoneJson(parent.card_db_, st, PlayerId::Player1, seat)},
+        {"P2", buildZoneJson(parent.card_db_, st, PlayerId::Player2, seat)},
+    };
+    frame["battlefields"] = buildBattlefieldsJson(parent.card_db_, st);
+    frame["board"] = buildBoardView(st, parent.card_db_, seat);
+    frame["turn"] = {
+        {"phase",       static_cast<int>(st.turn.phase)},
+        {"phase_name",  phaseShortName(st.turn.phase)},
+        {"turn_player", playerToStr(st.turn.turn_player)},
+        {"turn_number", st.turn.turn_number},
+        {"p1_score",    st.player(PlayerId::Player1).score},
+        {"p2_score",    st.player(PlayerId::Player2).score},
+        {"victory_score", st.mode.victory_score},
+    };
+    frame["game_over"] = st.game_over;
+    if (st.game_over) {
+        frame["winner"] = playerToStr(st.winner);
+        frame["game_over_reason"] = st.game_over_reason;
+    }
+    if (mine && !prompt.empty()) frame["prompt"] = prompt;
+    return frame.dump();
+}
+
+void PlayServer::Impl::broadcastDecisionFrame() {
+    std::list<std::shared_ptr<WsSession>> live;
+    {
+        std::lock_guard<std::mutex> lock(sessions_mu);
+        for (auto it = sessions.begin(); it != sessions.end();) {
+            if (auto s = it->lock()) { live.push_back(std::move(s)); ++it; }
+            else it = sessions.erase(it);
+        }
+    }
+
+    // The most recent prompt (set by broadcastLog when it saw a *_PROMPT
+    // trace line) heads the next decision's options. Taken once so it
+    // does not bleed into later, unrelated decisions.
+    std::string prompt;
+    {
+        std::lock_guard<std::mutex> lock(prompt_mu);
+        prompt.swap(last_prompt);
+    }
+
+    // One frame per seat in use, built under the state mutex so an
+    // in-flight edit can't tear it.
+    std::map<Seat, std::string> frames;
     {
         std::lock_guard<std::mutex> lock(parent.state_mutex_);
+        PlayerId active_player = PlayerId::None;
+        std::vector<Intent> legal;
+        uint64_t decision_id = 0;
+        bool at_decision = false;
         auto* p1 = parent.config_.p1_human;
         auto* p2 = parent.config_.p2_human;
         if (p1 && p1->atDecision()) {
@@ -607,79 +851,13 @@ void PlayServer::Impl::broadcastDecisionFrame() {
             decision_id = p2->decisionId();
             last_p2_decision_id = decision_id;
         }
-        render_text = parent.renderer_.render(parent.engine_.state());
-    }
-
-    json frame = {
-        {"type", at_decision ? "decision" : "state"},
-        {"decision_id", decision_id},
-        {"player", playerToStr(active_player)},
-        {"render_text", render_text},
-        {"god_mode", parent.config_.god_mode_enabled},
-    };
-    {
-        std::lock_guard<std::mutex> lock(parent.state_mutex_);
-        const auto& st = parent.engine_.state();
-        frame["legal"] = buildLegalActionJson(parent.card_db_, parent.renderer_, st, legal);
-        frame["zones"] = {
-            {"P1", buildZoneJson(parent.card_db_, st, PlayerId::Player1)},
-            {"P2", buildZoneJson(parent.card_db_, st, PlayerId::Player2)},
-        };
-        frame["battlefields"] = buildBattlefieldsJson(parent.card_db_, st);
-        // Phase name string — int-only was a UX miss, the integer phase
-        // tells the user nothing without a CR cross-reference.
-        const char* phase_name = "?";
-        switch (st.turn.phase) {
-            case TurnPhase::Setup:           phase_name = "Setup";         break;
-            case TurnPhase::Mulligan:        phase_name = "Mulligan";      break;
-            case TurnPhase::AwakenPhase:     phase_name = "Awaken";        break;
-            case TurnPhase::BeginningStep:   phase_name = "Beginning";     break;
-            case TurnPhase::ScoringStep:     phase_name = "Scoring";       break;
-            case TurnPhase::ChannelPhase:    phase_name = "Channel";       break;
-            case TurnPhase::DrawPhase:       phase_name = "Draw";          break;
-            case TurnPhase::MainPhase:       phase_name = "Main";          break;
-            case TurnPhase::EndingStep:      phase_name = "Ending";        break;
-            case TurnPhase::ExpirationStep:  phase_name = "Expiration";    break;
-            default:                          phase_name = "?";            break;
-        }
-        frame["turn"] = {
-            {"phase",       static_cast<int>(st.turn.phase)},
-            {"phase_name",  phase_name},
-            {"turn_player", playerToStr(st.turn.turn_player)},
-            {"turn_number", st.turn.turn_number},
-            {"p1_score",    st.player(PlayerId::Player1).score},
-            {"p2_score",    st.player(PlayerId::Player2).score},
-            {"victory_score", st.mode.victory_score},
-        };
-        frame["game_over"] = st.game_over;
-        if (st.game_over) {
-            frame["winner"] = playerToStr(st.winner);
-            frame["game_over_reason"] = st.game_over_reason;
-        }
-
-        // Attach the most recent prompt (set by broadcastLog when it saw
-        // a *_PROMPT trace line) so the UI can header the MakeChoice
-        // options with what's actually being decided. Cleared after
-        // attaching so the prompt doesn't bleed into subsequent
-        // unrelated decisions.
-        {
-            std::lock_guard<std::mutex> lock(prompt_mu);
-            if (!last_prompt.empty()) {
-                frame["prompt"] = last_prompt;
-                last_prompt.clear();
-            }
+        for (const auto& session : live) {
+            const Seat seat = session->seat();
+            if (!frames.count(seat))
+                frames[seat] = frameFor(seat, active_player, legal, decision_id, at_decision, prompt);
         }
     }
-
-    std::string text = frame.dump();
-    std::list<std::weak_ptr<WsSession>> snapshot;
-    {
-        std::lock_guard<std::mutex> lock(sessions_mu);
-        snapshot = sessions;
-    }
-    for (auto& w : snapshot) {
-        if (auto s = w.lock()) s->send(text);
-    }
+    for (const auto& session : live) session->send(frames[session->seat()]);
 }
 
 void PlayServer::Impl::runWatcher() {
@@ -719,11 +897,13 @@ PlayServer::PlayServer(GameEngine& engine,
                        StateRenderer& renderer,
                        const CardDB& card_db,
                        PlayServerConfig config)
-    : impl_(std::make_unique<Impl>(*this)),
-      engine_(engine),
+    : engine_(engine),
       renderer_(renderer),
       card_db_(card_db),
-      config_(std::move(config)) {}
+      config_(std::move(config)) {
+    // After the members above: Impl's renderer binds to card_db_.
+    impl_ = std::make_unique<Impl>(*this);
+}
 
 PlayServer::~PlayServer() {
     stop();
@@ -735,7 +915,7 @@ std::string PlayServer::start() {
     }
     // Build the served HTML once; reused across all GET /.
     auto images = ReplayWriter::loadCardImageMap();
-    impl_->index_html = buildPlayIndexHtml(
+    impl_->index_html = buildClassicPageHtml(
         images, config_.version_tag, config_.build_date, config_.seed,
         config_.god_mode_enabled);
 
@@ -804,6 +984,9 @@ void PlayServer::broadcastLog(const std::string& level, const std::string& messa
         impl_->last_prompt = std::move(prompt);
     }
 
+    // Engine log lines name cards as they are drawn, searched and hidden,
+    // so only the god seat receives them. Seats get a filtered, readable
+    // event log in PLAY-008.
     json frame = {
         {"type", "log"},
         {"level", level},
@@ -816,7 +999,7 @@ void PlayServer::broadcastLog(const std::string& level, const std::string& messa
         snapshot = impl_->sessions;
     }
     for (auto& w : snapshot) {
-        if (auto s = w.lock()) s->send(text);
+        if (auto s = w.lock(); s && s->seat() == Seat::God) s->send(text);
     }
 }
 
@@ -827,6 +1010,7 @@ void PlayServer::broadcastLog(const std::string& level, const std::string& messa
 HumanAgent* PlayServer::config_p1() const noexcept { return config_.p1_human; }
 HumanAgent* PlayServer::config_p2() const noexcept { return config_.p2_human; }
 bool PlayServer::godModeEnabled() const noexcept   { return config_.god_mode_enabled; }
+const std::string& PlayServer::webRoot() const noexcept { return config_.web_root; }
 GameState& PlayServer::engineMutableState() noexcept { return engine_.mutableState(); }
 
 } // namespace riftbound

@@ -360,9 +360,9 @@ target_link_libraries(riftbound_core PUBLIC ${RIFTBOUND_CORE_LIBS})
 # target_link_libraries(riftbound_engine PUBLIC riftbound_core)
 
 # ─── Unified riftbound binary ────────────────────────────────────────────────
-# One entry point for all modes: random / mcts / ismcts / human (1 or 2 seats),
-# single-game or batch via --games, optional Beast HTTP+WebSocket web UI via
-# --web. Pulls in OpenSpiel + the riftbound_game/state TUs so MctsAgent /
+# The engine's command-line binary: random / mcts / ismcts agents, single-game
+# or batch via --games. Human play in the browser is the separate play/ app
+# (riftbound_play), added at the end of this file. Pulls in OpenSpiel + the riftbound_game/state TUs so MctsAgent /
 # IsMctsAgent can construct cloneable OpenSpiel states internally.
 #
 # The riftbound_game.cpp + riftbound_state.cpp sources MUST be compiled into
@@ -373,8 +373,6 @@ target_link_libraries(riftbound_core PUBLIC ${RIFTBOUND_CORE_LIBS})
 add_executable(riftbound
     src/main.cpp
     src/agents/mcts_agent.cpp
-    src/io/play_server.cpp
-    src/io/play_index_html.cpp
     src/openspiel/riftbound_game.cpp
     src/openspiel/riftbound_state.cpp
     $<TARGET_OBJECTS:algorithms>
@@ -441,3 +439,11 @@ endif()
 
 include(GoogleTest)
 gtest_discover_tests(riftbound_tests)
+
+# ─── Play app (browser UI) ───────────────────────────────────────────────────
+# Lives in play/ and depends on the engine; the engine never depends on it.
+# -DRIFTBOUND_BUILD_PLAY=OFF builds the engine, its binary and its tests alone.
+option(RIFTBOUND_BUILD_PLAY "Build the riftbound_play browser app in play/" ON)
+if(RIFTBOUND_BUILD_PLAY)
+    add_subdirectory(play)
+endif()

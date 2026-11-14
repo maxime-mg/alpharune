@@ -964,6 +964,14 @@ void GameEngine::mainPhase() {
 // Those resets would corrupt a snapshot taken mid-chain or mid-showdown.
 void GameEngine::mainPhaseLoop() {
     int action_count = 0;
+    if (state_.move_cursor.has_value()) {
+        finishMoveGroup();
+        if (chain_manager_->chainExists()) runChain();
+        cleanup();
+        if (chain_manager_->chainExists()) runChain();
+        action_count++;
+        if (state_.game_over) return;
+    }
     while (true) {
         auto adv = advanceMainPhase(action_count);
         if (adv.kind == MainPhaseAdvance::Kind::Done) return;
@@ -2097,7 +2105,10 @@ void GameEngine::resolvePermanent(const ChainItem& item) {
     auto& card = state_.getObject(item.source);
     auto loc = card.location.value_or(BaseLocation{item.controller});
 
-    card.zone = ZoneType::Base;
+    // The zone follows the location, as in moveUnit and token creation: a
+    // permanent played to a battlefield is in that battlefield's zone.
+    card.zone = std::holds_alternative<BattlefieldLocation>(loc)
+        ? ZoneType::BattlefieldZone : ZoneType::Base;
     card.location = loc;
 
     // Units enter exhausted (CR 143.4) unless Accelerate / an "enters ready" effect
@@ -2253,9 +2264,72 @@ Intent GameEngine::queryAgentForChain(PlayerId player,
 
 void GameEngine::executeStandardMove(const Intent& intent) {
     if (!intent.move_destination.has_value()) return;
-    auto dest = *intent.move_destination;
+    if (intent.units_to_move.size() != 1) {
+        performStandardMove(intent.player, *intent.move_destination,
+                            intent.units_to_move);
+        return;
+    }
+    // CR 144.3: the chosen unit may be joined by others making the same
+    // move. Open the group; nothing moves until it is closed.
+    state_.move_cursor = GameState::MoveGroupCursor{
+        intent.player, *intent.move_destination, intent.units_to_move};
+    finishMoveGroup();
+}
 
-    for (auto unit_id : intent.units_to_move) {
+// The follow-up decision for an open group: Done first (legal[0], so an
+// agent that always takes the first option makes single-unit moves), then
+// one option per unit that has its own StandardMove to the same destination.
+// Only units with a higher id than the last pick are offered, so each group
+// is reachable in exactly one order.
+std::vector<Intent> GameEngine::moveGroupOptions() const {
+    const auto& cur = *state_.move_cursor;
+    std::vector<Intent> options;
+
+    Intent done;
+    done.type = IntentType::MakeChoice;
+    done.player = cur.player;
+    done.chosen_value = 0;
+    done.choice_label = "move_group: done";
+    options.push_back(std::move(done));
+
+    std::vector<Intent> moves;
+    appendStandardMoves(cur.player, moves);
+    const GameObjectId last = cur.units.back();
+    for (const auto& m : moves) {
+        if (m.units_to_move.size() != 1 || !m.move_destination ||
+            !(*m.move_destination == cur.destination))
+            continue;
+        const GameObjectId u = m.units_to_move[0];
+        if (u <= last) continue;
+        Intent add;
+        add.type = IntentType::MakeChoice;
+        add.player = cur.player;
+        add.chosen_objects = {u};
+        add.choice_label = "move_group: add " + state_.getObject(u).name;
+        options.push_back(std::move(add));
+    }
+    return options;
+}
+
+// Ask until the group is closed, then move every unit at once. Also the
+// re-entry point when a snapshot taken at the follow-up is resumed.
+void GameEngine::finishMoveGroup() {
+    while (true) {
+        auto options = moveGroupOptions();
+        if (options.size() <= 1) break;   // nobody left to add
+        auto chosen = decideNow(state_.move_cursor->player, options,
+                                "add a unit to the move, or done");
+        if (chosen.chosen_objects.size() != 1) break;   // Done
+        state_.move_cursor->units.push_back(chosen.chosen_objects[0]);
+    }
+    auto cur = std::move(*state_.move_cursor);
+    state_.move_cursor.reset();
+    performStandardMove(cur.player, cur.destination, cur.units);
+}
+
+void GameEngine::performStandardMove(PlayerId player, LocationId dest,
+                                     const std::vector<GameObjectId>& units) {
+    for (auto unit_id : units) {
         auto& unit_obj = state_.getObject(unit_id);
         std::string dest_str = std::holds_alternative<BattlefieldLocation>(dest)
             ? "BF#" + std::to_string(std::get<BattlefieldLocation>(dest).id)
@@ -2272,8 +2346,8 @@ void GameEngine::executeStandardMove(const Intent& intent) {
         moveUnit(unit_id, dest);
 
         events_.emit(UnitMovedEvent{
-            unit_id, intent.player,
-            old_location.value_or(BaseLocation{intent.player}),
+            unit_id, player,
+            old_location.value_or(BaseLocation{player}),
             dest, true
         });
     }
@@ -2288,7 +2362,7 @@ void GameEngine::executeStandardMove(const Intent& intent) {
         // previously the unit sat with combat_designation = None and
         // didn't contribute to damage assignment / step resolution.
         if (bf.combat_in_progress) {
-            for (auto unit_id : intent.units_to_move) {
+            for (auto unit_id : units) {
                 auto& unit_obj = state_.getObject(unit_id);
                 if (bf.attacker.has_value() && unit_obj.controller == *bf.attacker) {
                     unit_obj.combat_designation = CombatDesignation::Attacker;
@@ -2300,11 +2374,11 @@ void GameEngine::executeStandardMove(const Intent& intent) {
         }
 
         // Contested if moving to a BF we don't control (CR 187.3.a)
-        if (!bf.controller.has_value() || *bf.controller != intent.player) {
+        if (!bf.controller.has_value() || *bf.controller != player) {
             if (!bf.is_contested) {
                 bf.is_contested = true;
-                bf.contested_by = intent.player;
-                events_.emit(ContestedEvent{bf_id, intent.player});
+                bf.contested_by = player;
+                events_.emit(ContestedEvent{bf_id, player});
             }
             // Always re-evaluate staging when a unit arrives at a
             // contested BF. Previously this block only fired on the
@@ -2316,7 +2390,7 @@ void GameEngine::executeStandardMove(const Intent& intent) {
             if (!bf.showdown_staged && !bf.combat_staged &&
                 !bf.showdown_in_progress && !bf.combat_in_progress) {
                 bool has_opponent_units = bf.hasUnitsFrom(
-                    opponent(intent.player), state_.objects);
+                    opponent(player), state_.objects);
                 if (has_opponent_units) {
                     bf.combat_staged = true;
                 } else {
@@ -2607,13 +2681,10 @@ std::vector<Intent> GameEngine::generateLegalActions() const {
     return {};
 }
 
-std::vector<Intent> GameEngine::generateMainPhaseActions(PlayerId player) const {
-    std::vector<Intent> actions;
-
-    // Always can end turn
-    actions.push_back(Intent::endTurn(player));
-
-    // Standard Move: exhaust ready units to move them
+// Standard Move: exhaust ready units to move them. One intent per unit and
+// destination; group moves (CR 144.3) are built on top of these.
+void GameEngine::appendStandardMoves(PlayerId player,
+                                     std::vector<Intent>& actions) const {
     auto all_units = state_.allUnitsControlledBy(player);
     for (auto unit_id : all_units) {
         auto& unit = state_.getObject(unit_id);
@@ -2664,6 +2735,98 @@ std::vector<Intent> GameEngine::generateMainPhaseActions(PlayerId player) const 
             }
         }
     }
+}
+
+// The cards a player may play a unit from: the hand, plus the Chosen
+// Champion while it is still in the Champion Zone.
+std::vector<GameObjectId> GameEngine::unitPlaySources(PlayerId player) const {
+    const auto& ps = state_.player(player);
+    std::vector<GameObjectId> out = ps.hand;
+    if (ps.champion_zone != kInvalidId &&
+        state_.getObject(ps.champion_zone).zone == ZoneType::ChampionZone)
+        out.push_back(ps.champion_zone);
+    return out;
+}
+
+// Every location a unit may be played to (CR 355.2.a, 813.3.a): one copy of
+// `play` per location. Base always; battlefields the player controls; and
+// whatever the card's text or the board adds or takes away. `play` carries
+// the card and any cost flags; its play_location is set here.
+void GameEngine::appendUnitPlayLocations(PlayerId player, const Intent& play,
+                                         bool allow_paid_locations,
+                                         std::vector<Intent>& actions) const {
+    const auto& ps = state_.player(player);
+    const auto& card = state_.getObject(play.card);
+    if (card.card_def_id == kInvalidId) return;
+
+    // NARROWING hook (Perched Grimwyrm): the card dictates its own legal
+    // play locations and suppresses the default base + BF plays entirely.
+    const Card* card_obj = card_registry_.get(card.card_def_id);
+    if (card_obj && card_obj->restrictsPlayLocations()) {
+        for (const auto& loc : card_obj->getPlayLocations(state_, player)) {
+            Intent restricted = play;
+            restricted.play_location = loc;
+            actions.push_back(restricted);
+        }
+        return;  // no default base/BF plays for this card
+    }
+
+    // Check play-to-location abilities from ability_text
+    const auto& text = card_db_.get(card.card_def_id).ability_text;
+    bool can_play_open_bf = (text.find("play me to an open battlefield") != std::string::npos);
+    bool can_play_enemy_bf = (text.find("play me to an occupied enemy battlefield") != std::string::npos);
+    bool can_play_any_bf = (text.find("play me to a battlefield") != std::string::npos ||
+                            text.find("play me at a battlefield") != std::string::npos);
+    // Board-wide grant: a friendly unit (e.g. Miss Fortune, Buccaneer) lets
+    // ALL of this player's units be played to open battlefields.
+    if (ps.grant_friendly_units_open_bf) can_play_open_bf = true;
+
+    // Can always play to base (CR 355.2.a)
+    Intent to_base = play;
+    to_base.play_location = BaseLocation{player};
+    actions.push_back(to_base);
+
+    // Mageseeker Warden: while it restricts this player, units may be
+    // played ONLY to base — skip all battlefield plays.
+    if (ps.units_play_base_only) return;
+
+    for (auto& bf : state_.battlefields) {
+        if (bf.blocks_unit_play) continue;  // Rockfall Path
+        bool controlled = bf.controller.has_value() && *bf.controller == player;
+        bool open = !bf.controller.has_value();
+        bool enemy_occupied = bf.controller.has_value() && *bf.controller != player &&
+                              bf.hasUnitsFrom(opponent(player), state_.objects);
+
+        bool can_play_here = controlled; // default: controlled BFs
+        if (can_play_open_bf && open) can_play_here = true;
+        if (can_play_enemy_bf && enemy_occupied) can_play_here = true;
+        if (can_play_any_bf) can_play_here = true;
+
+        if (can_play_here) {
+            Intent bf_play = play;
+            bf_play.play_location = BattlefieldLocation{bf.id};
+            actions.push_back(bf_play);
+        } else if (allow_paid_locations && bf.paid_play_power > 0 &&
+                   std::find(card.tags.begin(), card.tags.end(), bf.paid_play_tag) !=
+                       card.tags.end() &&
+                   canAfford(player, play.card, bf.paid_play_power)) {
+            // "Any player may pay ... as an additional cost to play a <tag>.
+            // If they do, they play it to this battlefield."
+            Intent paid_play = play;
+            paid_play.play_location = BattlefieldLocation{bf.id};
+            paid_play.pay_location_cost = true;
+            actions.push_back(paid_play);
+        }
+    }
+}
+
+std::vector<Intent> GameEngine::generateMainPhaseActions(PlayerId player) const {
+    std::vector<Intent> actions;
+
+    // Always can end turn
+    actions.push_back(Intent::endTurn(player));
+
+    appendStandardMoves(player, actions);
 
     // Play units from hand — must be able to afford the cost.
     auto& ps = state_.player(player);
@@ -2675,74 +2838,19 @@ std::vector<Intent> GameEngine::generateMainPhaseActions(PlayerId player) const 
         if (card.card_def_id == kInvalidId) continue;  // tokens have no CardDef
         if (!canAfford(player, card_id)) continue;
 
-        // Check play-to-location abilities from ability_text
-        const auto& def = card_db_.get(card.card_def_id);
-        auto& text = def.ability_text;
-        bool can_play_open_bf = (text.find("play me to an open battlefield") != std::string::npos);
-        bool can_play_enemy_bf = (text.find("play me to an occupied enemy battlefield") != std::string::npos);
-        bool can_play_any_bf = (text.find("play me to a battlefield") != std::string::npos ||
-                                text.find("play me at a battlefield") != std::string::npos);
-        // Board-wide grant: a friendly unit (e.g. Miss Fortune, Buccaneer) lets
-        // ALL of this player's units be played to open battlefields.
-        if (ps.grant_friendly_units_open_bf) can_play_open_bf = true;
-
         Intent play_intent;
         play_intent.type = IntentType::PlayCard;
         play_intent.player = player;
         play_intent.card = card_id;
-
-        // NARROWING hook (Perched Grimwyrm): the card dictates its own legal
-        // play locations and suppresses the default base + BF plays entirely.
-        const Card* card_obj = card_registry_.get(card.card_def_id);
-        if (card_obj && card_obj->restrictsPlayLocations()) {
-            for (const auto& loc : card_obj->getPlayLocations(state_, player)) {
-                Intent restricted = play_intent;
-                restricted.play_location = loc;
-                actions.push_back(restricted);
-            }
-            continue;  // no default base/BF plays for this card
-        }
-
-        // Can always play to base (CR 355.2.a)
-        play_intent.play_location = BaseLocation{player};
-        actions.push_back(play_intent);
-
-        // Mageseeker Warden: while it restricts this player, units may be
-        // played ONLY to base — skip all battlefield plays.
-        if (ps.units_play_base_only) continue;
-
-        for (auto& bf : state_.battlefields) {
-            if (bf.blocks_unit_play) continue;  // Rockfall Path
-            bool controlled = bf.controller.has_value() && *bf.controller == player;
-            bool open = !bf.controller.has_value();
-            bool enemy_occupied = bf.controller.has_value() && *bf.controller != player &&
-                                  bf.hasUnitsFrom(opponent(player), state_.objects);
-
-            bool can_play_here = controlled; // default: controlled BFs
-            if (can_play_open_bf && open) can_play_here = true;
-            if (can_play_enemy_bf && enemy_occupied) can_play_here = true;
-            if (can_play_any_bf) can_play_here = true;
-
-            if (can_play_here) {
-                Intent bf_play = play_intent;
-                bf_play.play_location = BattlefieldLocation{bf.id};
-                actions.push_back(bf_play);
-            } else if (bf.paid_play_power > 0 &&
-                       std::find(card.tags.begin(), card.tags.end(), bf.paid_play_tag) !=
-                           card.tags.end() &&
-                       canAfford(player, card_id, bf.paid_play_power)) {
-                // "Any player may pay ... as an additional cost to play a <tag>.
-                // If they do, they play it to this battlefield."
-                Intent paid_play = play_intent;
-                paid_play.play_location = BattlefieldLocation{bf.id};
-                paid_play.pay_location_cost = true;
-                actions.push_back(paid_play);
-            }
-        }
+        appendUnitPlayLocations(player, play_intent, /*allow_paid_locations=*/true,
+                                actions);
     }
 
-    // Play champion from champion zone (also must afford)
-    if (ps.champion_zone != kInvalidId) {
+    // Play champion from champion zone (also must afford). A Chosen
+    // Champion is a unit like any other once played (CR 355.9.a.5), so it
+    // gets the same play locations as a unit in hand: base, battlefields
+    // you control, and whatever its own text or the board grants.
+    if (ps.champion_zone != kInvalidId && !locked_out) {
         auto& champ = state_.getObject(ps.champion_zone);
         if (champ.zone == ZoneType::ChampionZone) {
             if (canAfford(player, ps.champion_zone)) {
@@ -2750,8 +2858,8 @@ std::vector<Intent> GameEngine::generateMainPhaseActions(PlayerId player) const 
                 play_intent.type = IntentType::PlayCard;
                 play_intent.player = player;
                 play_intent.card = ps.champion_zone;
-                play_intent.play_location = BaseLocation{player};
-                actions.push_back(play_intent);
+                appendUnitPlayLocations(player, play_intent,
+                                        /*allow_paid_locations=*/true, actions);
             }
             // Alternative play cost (Jhin, Meticulous Killer): offer "play me for
             // <alt>" when the condition holds and the alt cost is affordable —
@@ -2778,9 +2886,11 @@ std::vector<Intent> GameEngine::generateMainPhaseActions(PlayerId player) const 
                     alt_play.type = IntentType::PlayCard;
                     alt_play.player = player;
                     alt_play.card = ps.champion_zone;
-                    alt_play.play_location = BaseLocation{player};
                     alt_play.use_alt_play_cost = true;
-                    actions.push_back(alt_play);
+                    // A battlefield's extra play cost is checked against the
+                    // printed cost, so the alternative-cost play skips it.
+                    appendUnitPlayLocations(player, alt_play,
+                                            /*allow_paid_locations=*/false, actions);
                 }
             }
         }
@@ -2929,7 +3039,7 @@ std::vector<Intent> GameEngine::generateShowdownActions(PlayerId player) const {
     }
 
     // Ambush: play units with [Ambush] during showdowns
-    for (auto card_id : state_.player(player).hand) {
+    for (auto card_id : unitPlaySources(player)) {
         if (locked_out) break;
         auto& card = state_.getObject(card_id);
         if (!card.isUnit() || !card.hasKeyword(Keyword::Ambush)) continue;
@@ -2957,7 +3067,7 @@ std::vector<Intent> GameEngine::generateShowdownActions(PlayerId player) const {
 
     // Reaction-to-attack plays (e.g., Rengar, Pouncing — play to a BF where
     // you are currently attacking).
-    for (auto card_id : state_.player(player).hand) {
+    for (auto card_id : unitPlaySources(player)) {
         if (locked_out) break;
         auto& card = state_.getObject(card_id);
         if (!card.isUnit()) continue;
@@ -3069,7 +3179,7 @@ std::vector<Intent> GameEngine::generateClosedStateActions(
     }
 
     // Ambush: play units with [Ambush] as Reactions to BFs where you have units
-    for (auto card_id : state_.player(player).hand) {
+    for (auto card_id : unitPlaySources(player)) {
         if (locked_out) break;
         auto& card = state_.getObject(card_id);
         if (!card.isUnit() || !card.hasKeyword(Keyword::Ambush)) continue;
@@ -3094,7 +3204,7 @@ std::vector<Intent> GameEngine::generateClosedStateActions(
     }
 
     // Reaction-to-attack plays during Closed State (Rengar, Pouncing).
-    for (auto card_id : state_.player(player).hand) {
+    for (auto card_id : unitPlaySources(player)) {
         if (locked_out) break;
         auto& card = state_.getObject(card_id);
         if (!card.isUnit()) continue;

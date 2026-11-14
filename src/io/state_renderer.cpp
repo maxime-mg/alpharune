@@ -477,7 +477,9 @@ std::string StateRenderer::renderPlayerSection(const GameState& state,
     ss << "|" << padRight(champ_line.str(), w - 2) << "|\n";
 
     // Hand — may be multi-line
-    auto hand_text = renderHandLine(state, player);
+    auto hand_text = (hide_other_hands && player != hand_viewer)
+        ? "(" + std::to_string(state.player(player).hand.size()) + " cards, hidden)"
+        : renderHandLine(state, player);
     {
         std::istringstream hs(hand_text);
         std::string line;

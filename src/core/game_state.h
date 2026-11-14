@@ -660,6 +660,18 @@ struct GameState {
     };
     std::optional<CostPaymentCursor> cost_cursor;
 
+    // ── Group move cursor (CR 144.3) ──
+    // A Standard Move whose first unit is chosen and whose group is still
+    // open: the mover is being asked "add another unit or done". Nothing has
+    // moved yet. Lives in the state so a snapshot taken at that decision
+    // resumes into it (GameEngine::mainPhaseLoop).
+    struct MoveGroupCursor {
+        PlayerId player = PlayerId::None;
+        LocationId destination = BaseLocation{PlayerId::None};
+        std::vector<GameObjectId> units;   // chosen so far, increasing id after the first
+    };
+    std::optional<MoveGroupCursor> move_cursor;
+
     // ── Object management ──
 
     GameObjectId createObject() {

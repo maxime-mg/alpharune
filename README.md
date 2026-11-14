@@ -61,28 +61,21 @@ RIFTBOUND_ROOT=. ./build/riftbound_tests
     --deck2 decks/miss_fortune_test.txt \
     --games 100 --threads 8
 
-# Play AS A HUMAN against MCTS-50 in your browser. The binary
-# auto-starts a Boost.Beast webserver on http://127.0.0.1:8080
-# whenever any seat is human; trace logging + HTML replay are also
-# auto-enabled. Open the URL in any browser to play.
-./build/riftbound \
+# Play AS A HUMAN against MCTS-50 in your browser. Human seats live in
+# the separate play app (play/), built as build/play/riftbound_play.
+./build/play/riftbound_play \
     --agent1 human --agent2 mcts:sims=50 \
     --deck1 decks/miss_fortune_test.txt \
     --deck2 decks/miss_fortune_test.txt
 
-# Want to play as P2 instead? Swap the seats:
-./build/riftbound \
-    --agent1 mcts:sims=50 --agent2 human \
+# Hot-seat on two devices: P1 opens /?seat=p1, P2 opens /?seat=p2
+./build/play/riftbound_play --agent1 human --agent2 human --bind 0.0.0.0 \
+    --god-mode off \
     --deck1 decks/miss_fortune_test.txt \
     --deck2 decks/miss_fortune_test.txt
 
-# Hot-seat (two humans in one browser tab, take turns):
-./build/riftbound --agent1 human --agent2 human \
-    --deck1 decks/miss_fortune_test.txt \
-    --deck2 decks/miss_fortune_test.txt
-
-# Spectator (force the web UI ON for an AI-vs-AI game):
-./build/riftbound --agent1 random --agent2 mcts:sims=20 --web on \
+# Spectate an AI-vs-AI game in the browser
+./build/play/riftbound_play --agent1 random --agent2 mcts:sims=20 \
     --deck1 decks/miss_fortune_test.txt \
     --deck2 decks/miss_fortune_test.txt
 ```
@@ -92,78 +85,67 @@ is documented in [`docs/play-api.md`](docs/play-api.md).
 
 ## Play against the AI (web UI)
 
-The fastest way to play a game yourself, as Player 1, against a
-50-simulation MCTS bot:
+The play app lives in `play/`, apart from the engine: `riftbound`
+itself has no server and no human seats. Configure with
+`-DRIFTBOUND_BUILD_PLAY=OFF` to build the engine alone.
+
+To play as Player 1 against a 50-simulation MCTS bot:
 
 ```bash
-./build/riftbound \
+./build/play/riftbound_play \
     --agent1 human --agent2 mcts:sims=50 \
     --deck1 decks/miss_fortune_test.txt \
     --deck2 decks/miss_fortune_test.txt
 ```
 
-Because a seat is `human`, the binary auto-starts a small Boost.Beast
-web server and prints a URL:
+Then open `http://127.0.0.1:8080/`. The game waits at each of your
+decisions until you click; the bot moves on its own. MCTS cost grows
+with `sims`: `sims=50` is quick, while `sims=500` can take minutes per
+decision.
 
-```
-  → Open http://127.0.0.1:8080 in your browser to play.
-```
-
-Open that in a browser and play. The game blocks at each of your
-decision points until you click an action; the MCTS opponent moves on
-its own. (MCTS cost scales with `sims` — `sims=50` is snappy; `sims=500`
-can take minutes *per decision*, so start low.)
-
-Useful flags:
+Useful flags (`--help` lists them all):
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--agent1` / `--agent2` | `random` | Per-seat agent: `human`, `random`, `mcts:sims=N`, `ismcts:sims=N`. |
-| `--web` | `auto` | `auto` starts the UI whenever a seat is human; `on` forces it (spectate AI-vs-AI); `off` disables it. |
-| `--port` / `--bind` | `8080` / `127.0.0.1` | Where the UI listens. Use `--bind 0.0.0.0` to reach it from another machine. |
-| `--god-mode` | `auto` | `auto`/`on` enables the in-browser state editor when a human is seated; `off` hides it. |
-| `--seed` | `0` | Fix the RNG for a reproducible game (`0` = random per game). |
-| `--wild` | off | Wild format: allow banned cards in decks (ignores each card's `banned` flag so banned cards can be played). |
+| `--agent1` / `--agent2` | `human` / `random` | Per-seat agent: `human`, `random`, `mcts:sims=N`, `ismcts:sims=N`. |
+| `--port` / `--bind` | `8080` / `127.0.0.1` | Where the UI listens. `--bind 0.0.0.0` lets other machines connect. |
+| `--god-mode` | `on` | Allows the god seat, which sees everything and can edit the state. Turn it off when the two players are on different devices. |
+| `--seed` | `0` | Fixes the RNG for a reproducible game (`0` = random). |
+| `--wild` | off | Allows banned cards. |
 
-### What the UI looks like
+### Seats
 
-The page is a single resizable dashboard (drag the dividers between
-panels to resize):
+Add `?seat=` to the URL, or use the picker in the top bar:
 
-- **Header** — engine version + build, the game seed, and a live
-  connection indicator.
-- **Board** (left) — the live ASCII board state, with a status line at
-  the top showing turn number, phase, both scores (P1 green / P2 red),
-  and whose decision it is.
-- **Legal Actions** (top-right) — your legal moves as clickable buttons.
-  **Click one to take it.** When the engine is resolving or the MCTS
-  opponent is thinking, the buttons grey out and show *"engine is
-  processing…"* so you can't double-act. Mid-resolution choices (e.g.
-  "Discard a card", "Choose one —") show a prompt header plus
-  human-readable option labels (`Yes`, `No`, a mode name, an `X` value)
-  rather than bare indices.
-- **Recent Actions** — a calm, high-signal feed of what each side just
-  did (plays, kills, scores) so you can follow the opponent without
-  reading the firehose.
-- **Trace** — the full event log (every phase, decision, effect, damage,
-  draw, etc.). Verbose; the Recent Actions feed is the readable summary.
-- **Card Details** (right) — **hover any card name** anywhere in the UI
-  to load that card's art (fetched on demand from Riot's CDN).
-- **God Mode** (only when `--god-mode` is on) — a state editor to move
-  cards between zones, set might/damage/exhaustion, edit scores/energy,
-  reorder decks, and change phase. Handy for setting up specific
-  scenarios or debugging.
+| Seat | Sees |
+|---|---|
+| `auto` (default) | Your human seat |
+| `p1` / `p2` | That player's hand and face-down cards, public zones, deck counts |
+| `spectator` | Public zones and counts only |
+| `god` | Everything, including deck order. Also the engine log and the state editor (on `/classic`). |
 
-Other modes: `--agent1 mcts:sims=50 --agent2 human` to play as P2,
-`--agent1 human --agent2 human` for hot-seat (two players, one tab,
-taking turns), and `--web on` with two AI seats to spectate. The
-underlying WebSocket protocol is in [`docs/play-api.md`](docs/play-api.md).
+### The board
+
+`/` is the visual board (`play/web/`):
+
+- Your opponent is at the top and you are at the bottom, with the battlefields in between.
+- Cards show their art, might, damage, exhaustion, keywords and gear. Hover a card for its full text.
+- Cards you can act with are outlined. Click one to play it, or to pick it when paying a cost.
+- The side panel holds the turn, priority, your options, the cost being paid, the chain and an optional text view.
+
+The older text dashboard, with its god-mode editor, is still at `/classic`.
+
+See [`docs/phase1-visual-board.md`](docs/phase1-visual-board.md) for
+what the board covers and how to test it, and
+[`docs/play-api.md`](docs/play-api.md) for the WebSocket protocol.
 
 ## Binaries
 
 | Binary | Purpose |
 |---|---|
-| `build/riftbound` | Unified game runner. All modes (single / batch / web UI / spectator), all agents (`random` / `human` / `mcts:sims=N` / `ismcts:sims=N`), HTML replay, trace/debug logging — all driven by CLI flags. |
+| `build/riftbound` | Engine game runner: single and batch games, all AI agents (`random` / `mcts:sims=N` / `ismcts:sims=N`), HTML replay, trace and debug logging. No human seats. |
+| `build/play/riftbound_play` | Play app: one game served to the browser, with human seats, spectators and the god seat. |
+| `build/play/riftbound_play_tests` | Play app tests (board view, seats, human agent). |
 | `build/riftbound_tests` | Google Test suite. |
 | `build/src/openspiel/riftbound_clone_equiv_test` | Validates Clone() correctness — clones mid-game, runs the same actions on original + clone, asserts identical terminal state. |
 | `build/src/openspiel/riftbound_clone_microbench` | Microbenchmark — times Clone() throughput. |

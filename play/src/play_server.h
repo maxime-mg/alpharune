@@ -3,13 +3,16 @@
 /// Boost.Beast HTTP + WebSocket server for the human-play web UI.
 ///
 /// The server has two responsibilities:
-///   1. Serve the embedded single-page HTML at GET /.
-///   2. Accept WebSocket upgrades at GET /ws, then exchange JSON
+///   1. Serve the board page from `web_root` at GET / (and its other
+///      files by name), and the older embedded page at GET /classic.
+///   2. Accept WebSocket upgrades at GET /ws?seat=..., then exchange JSON
 ///      messages with the browser to surface engine decisions and
-///      accept human input.
+///      accept human input. Each connection has a seat (p1, p2,
+///      spectator, god) and only receives what that seat may see; see
+///      board_view.h.
 ///
 /// One PlayServer instance per game. Constructed and started by
-/// `main_play.cpp` before the engine thread begins runGame(). The
+/// `play/src/main.cpp` before the engine thread begins runGame(). The
 /// server owns its own asio io_context + worker thread; the engine
 /// runs in a separate thread and blocks at decision points via the
 /// HumanAgent it was constructed with.
@@ -51,7 +54,7 @@ struct PlayServerConfig {
 
     /// When true, accept `edit_*` messages and dispatch to StateEditor.
     /// When false, edit messages are rejected with an `edit_err` reply.
-    /// `main_play.cpp` enables this only when at least one seat is human.
+    /// `play/src/main.cpp` enables this only when at least one seat is human.
     bool god_mode_enabled = false;
 
     /// Surfaced in the served HTML banner so the user can tie their
@@ -60,6 +63,9 @@ struct PlayServerConfig {
     std::string build_date;
     uint64_t    seed = 0;
 
+    /// Directory holding index.html, board.js and board.css.
+    std::string web_root;
+
     /// Slots for the two seats. Null = AI seat (no human input expected).
     /// At least one MUST be non-null for the server to be useful.
     HumanAgent* p1_human = nullptr;
@@ -67,7 +73,7 @@ struct PlayServerConfig {
 
     /// Fired on the first SIGINT / SIGTERM received after `start()`.
     /// Runs on the server's IO thread (not in signal-handler context),
-    /// so it may take locks, allocate, etc. `main_play.cpp` uses this
+    /// so it may take locks, allocate, etc. `play/src/main.cpp` uses this
     /// to call `HumanAgent::abort()` on each human seat, which wakes
     /// the engine thread out of `selectAction` so the game terminates
     /// cleanly. A second signal arriving while the callback is still
@@ -110,6 +116,7 @@ public:
     HumanAgent* config_p1() const noexcept;
     HumanAgent* config_p2() const noexcept;
     bool        godModeEnabled() const noexcept;
+    const std::string& webRoot() const noexcept;
     GameState&  engineMutableState() noexcept;
 
     // Forward-declared here so play_server.cpp can define the pimpl. The
