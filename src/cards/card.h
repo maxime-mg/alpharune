@@ -475,6 +475,14 @@ public:
                  uint32_t legal_modes = 0xFFFFFFFFu,
                  std::source_location where = std::source_location::current(),
                  PromptKind kind = PromptKind::Mode);
+    /// The modes (one bit each) that the other executions of this spell have
+    /// chosen with pickMode, while one execution makes its choices: "Choose one
+    /// you haven't already chosen" on a spell with [Repeat]. All executions
+    /// choose as the spell is played (CR 820.2), before any resolves, so what
+    /// was chosen is read from the item and not from what has happened yet.
+    /// Covers the executions before this one, and — when an effect makes new
+    /// choices for the first one — the additional ones. 0 at resolution.
+    static uint32_t modesOfOtherExecutions(const CardContext& ctx);
     /// Record `mode` as this callback's pickMode answer without asking: for a
     /// helper that finds there is nothing to choose now but must not have the
     /// question asked later, when there might be (pickEffectPlayLocation at
@@ -1252,11 +1260,16 @@ public:
     /// (TriggerManager::fireTrigger stamps the object; CR 383.1). For an event
     /// of the object itself. A "first time" that counts a player's events
     /// ("a friendly unit dies") reads the turn's count in triggerCondition
-    /// instead, since the card need not have been there for the first one.
+    /// instead, since the card need not have been there for the first one. A
+    /// battlefield is there throughout, and what its abilities watch is "a
+    /// player" doing something: its first time is counted for each player.
     virtual bool firstTimeEachTurn(TriggerType /*trigger*/) const { return false; }
-    /// The card_counters key of that stamp (turn + 1).
-    static std::string firstTimeKey(TriggerType trigger) {
-        return "__first_time_" + std::to_string(static_cast<int>(trigger));
+    /// The card_counters key of that stamp (turn + 1); of `player`'s stamp on
+    /// a battlefield.
+    static std::string firstTimeKey(TriggerType trigger, PlayerId player = PlayerId::None) {
+        std::string key = "__first_time_" + std::to_string(static_cast<int>(trigger));
+        if (player != PlayerId::None) key += "_p" + std::to_string(static_cast<int>(player));
+        return key;
     }
 
     /// An Equipment whose effect text is a copy of its bearer's text ("As this

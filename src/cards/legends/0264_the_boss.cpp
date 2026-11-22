@@ -6,7 +6,6 @@
 #include "cards/card_helpers.h"
 #include <algorithm>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -52,9 +51,7 @@ public:
         if (!victim.isUnit() || !victim.location.has_value()) return false;
         if (victim.controller != self.controller || victim.buff_count <= 0) return false;
         if (self.is_exhausted) return false;
-        for (Domain d : def().domains)
-            if (payableOnePower(state, self.controller, d)) return true;
-        return false;
+        return resource::payablePowerIn(state, self.controller, classPower()) >= 1;
     }
     bool applyReplacement(CardContext& ctx, GameObjectId dying_unit) override {
         // Only a BUFFED unit I control that is on the board, only while I'm
@@ -64,14 +61,10 @@ public:
         auto& self = ctx.state.getObject(ctx.source);
         auto& victim = ctx.state.getObject(dying_unit);
         const PlayerId me = self.controller;
-        std::optional<Domain> pay_with;
-        for (Domain d : def().domains)
-            if (payableOnePower(ctx.state, me, d)) { pay_with = d; break; }
-        if (!pay_with.has_value()) return false;
         if (!ctx.executor.confirmNow(me, "The Boss: pay [C], exhaust me and spend " +
                                          victim.name + "'s buff to recall it instead of dying"))
             return false;
-        if (!payOnePower(ctx, me, *pay_with)) return false;
+        if (!ctx.executor.payResources(me, 0, 1, classPower())) return false;
         ctx.executor.exhaustObject(ctx.source);
         ctx.executor.spendBuff(dying_unit, me);
         RIFT_TRACE(ctx.events, "THE BOSS: save buffed unit " + victim.name +
@@ -82,6 +75,9 @@ public:
         return true;  // replacement consumed — the unit does not die
     }
 private:
+    // [C]: either Domain pays, and the payer chooses the rune.
+    resource::DomainMask classPower() const { return resource::maskOf(def().domains); }
+
     const CardDef def_ = [] {
         CardDef d;
         d.id = 264;

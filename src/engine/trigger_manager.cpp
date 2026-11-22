@@ -411,7 +411,9 @@ bool TriggerManager::fireTrigger(GameObjectId source, PlayerId controller,
     // Kept on the object for its life on the board (Card::forgetPlayPayments
     // drops it as it is played again: a new object, CR 124.1).
     if (card && card->firstTimeEachTurn(fired)) {
-        auto& stamp = obj.card_counters[Card::firstTimeKey(fired)];
+        const PlayerId whose =
+            obj.card_type == CardType::Battlefield ? controller : PlayerId::None;
+        auto& stamp = obj.card_counters[Card::firstTimeKey(fired, whose)];
         if (stamp == state_.turn.turn_number + 1) return false;
         stamp = state_.turn.turn_number + 1;
     }

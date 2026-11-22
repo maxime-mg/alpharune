@@ -22,9 +22,11 @@ public:
     //
     // "[Repeat] — [1] / [A] / [1][A]": three separate Repeat costs, each
     // payable once (CR 820.1.c.2-3), so the spell runs up to four times and
-    // each run picks a mode not yet chosen. The "haven't already chosen"
-    // memory belongs to ONE play of the card (keyed by the chain item), so a
-    // later cast starts fresh.
+    // each run picks a mode not yet chosen. The modes are chosen as the spell
+    // is played (CR 820.2), so what the other runs took is read from their
+    // choices (modesOfOtherExecutions). The mask on the card is for a run that
+    // chooses as it executes (an item nobody finalized); it belongs to ONE
+    // play of the card (keyed by the chain item), so a later cast starts fresh.
     std::vector<RepeatCost> repeatCosts() const override {
         return {RepeatCost{.energy = 1},
                 RepeatCost{.power = 1, .power_domain = Domain::Count},
@@ -45,7 +47,8 @@ public:
         // repeated). Direct invocations with no chain item count as one play.
         const int play = ctx.state.chain.resuming.has_value()
             ? static_cast<int>(ctx.state.chain.resuming->id.raw()) + 1 : 0;
-        const int used_mask = counters[kPlayKey] == play ? counters[kMaskKey] : 0;
+        const int used_mask = (counters[kPlayKey] == play ? counters[kMaskKey] : 0) |
+                              static_cast<int>(modesOfOtherExecutions(ctx));
 
         const auto at_bf = chooseableUnits(ctx.state, ctx.controller,
             [](const GameObject& o) { return o.isAtBattlefield(); });

@@ -28,16 +28,21 @@ TEST_F(Misc2Test, DreamingTree_DrawsOncePerTurn) {
     state.battlefields[0].card_object_id = tree;
     addToDeck(P1, 1);
     addToDeck(P1, 1);
+    auto unit = addUnit(P1, kInvalidId, 2, /*at_bf=*/0);
     int hand0 = static_cast<int>(state.player(P1).hand.size());
 
-    EffectExecutor exec(state, events, card_db);
-    CardContext ctx{state, events, exec, P1, tree};
-    ctx.firing_trigger = TriggerType::WhenAFriendlyUnitChosenHere;
-    Card* c = card_registry.get(kDreamingTree);
-    c->onTrigger(ctx, {});
+    // A spell of P1's chooses the unit, twice in the turn.
+    auto choose = [&]() {
+        pushSpellOnChain(P1, kInvalidId, {unit});
+        withEngine([&](GameEngine& e) {
+            events.emit(ObjectStateChangedEvent{unit, "chosen_by_controller"});
+            settleLikeTheEngine(e);
+        });
+    };
+    choose();
     EXPECT_EQ(static_cast<int>(state.player(P1).hand.size()), hand0 + 1)
         << "first friendly-unit choice here this turn draws 1";
-    c->onTrigger(ctx, {});
+    choose();
     EXPECT_EQ(static_cast<int>(state.player(P1).hand.size()), hand0 + 1)
         << "no draw on the second choice the same turn";
 }

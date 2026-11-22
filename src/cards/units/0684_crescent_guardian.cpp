@@ -21,20 +21,12 @@ public:
                                                   PlayerId player) const override {
         if (!state.player(player).played_spell_this_turn) return {};
         return {/*valid=*/true, /*energy=*/0, /*power=*/1, Domain::Chaos,
-                /*any_domain=*/false, /*paid_flag=*/"__crescent_paid"};
+                /*any_domain=*/false, /*paid_flag=*/kAdditionalCostPaid};
     }
-    TriggerType triggerType() const override { return TriggerType::WhenYouPlayMe; }
-    void onTrigger(CardContext& ctx, const std::vector<GameObjectId>&) override {
-        if (!ctx.state.objectExists(ctx.source)) return;
-        auto& self = ctx.state.getObject(ctx.source);
-        // The engine sets the flag when the cost is paid and never clears it:
-        // consume it, or a later replay without paying would still count.
-        const auto flag = self.card_counters.find("__crescent_paid");
-        const bool paid = flag != self.card_counters.end() && flag->second == 1;
-        self.card_counters.erase("__crescent_paid");
-        if (!paid) return;
-        ctx.executor.readyObject(ctx.source);   // no-op if I left the board
-        RIFT_TRACE(ctx.events, "CRESCENT GUARDIAN: paid [P] after a spell -> I enter ready");
+    // It enters that way: no ability goes on the chain (CR 143.4).
+    bool entersReadyOnPlay(const GameState&, PlayerId, const GameObject& self) const override {
+        const auto flag = self.card_counters.find(kAdditionalCostPaid);
+        return flag != self.card_counters.end() && flag->second == 1;
     }
 private:
     const CardDef def_ = [] {

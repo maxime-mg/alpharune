@@ -18,7 +18,11 @@ public:
     // time each turn, they draw 1." Fired from the "chosen_by_controller"
     // event (WhenAFriendlyUnitChosenHere; the chosen unit is the subject),
     // which abilities emit too: triggerCondition keeps only a SPELL's choice.
-    // Once per turn per player via a turn-stamped card_counter.
+    // The first time is the first such choice, whatever becomes of the ability
+    // it caused (CR 383.1), and each player has their own: firstTimeEachTurn.
+    bool firstTimeEachTurn(TriggerType trigger) const override {
+        return trigger == TriggerType::WhenAFriendlyUnitChosenHere;
+    }
     TriggerType triggerType() const override {
         return TriggerType::WhenAFriendlyUnitChosenHere;
     }
@@ -39,13 +43,6 @@ public:
         return false;
     }
     void onTrigger(CardContext& ctx, const std::vector<GameObjectId>&) override {
-        if (!ctx.state.objectExists(ctx.source)) return;
-        auto& me = ctx.state.getObject(ctx.source);
-        const int stamp = ctx.state.turn.turn_number + 1;  // +1 so default 0 = never
-        const std::string key = "__dreaming_tree_drew_p" +
-            std::to_string(static_cast<int>(ctx.controller));
-        if (me.card_counters[key] == stamp) return;  // already drew this turn
-        me.card_counters[key] = stamp;
         ctx.executor.drawCards(ctx.controller, 1);
         RIFT_TRACE(ctx.events, "THE DREAMING TREE: first friendly-unit choice here -> draw 1");
     }

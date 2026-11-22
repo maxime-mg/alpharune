@@ -211,7 +211,7 @@ struct PlayerState {
     // Turn-scoped riders (NOT aura-derived — reset in resetTurnTracking):
     int max_spell_spent_this_turn = 0;         // most-expensive single spell paid for this turn (Jhin, Meticulous Killer: "spent [4]+ to play a spell")
     int next_spell_bonus_damage = 0;           // Ravenborn Tome: "the next spell you play this turn deals N Bonus Damage" (consumed when that spell deals damage)
-    bool grant_repeat_base_to_next_spell = false; // The Academy (772): the next spell without a printed [Repeat] gets a Repeat cost equal to its base cost (Energy and Power)
+    bool grant_repeat_base_to_next_spell = false; // The Academy (772): the next spell gets a [Repeat] equal to its base cost, beside any it prints (Energy and Power)
     // "You can look at their facedown cards this turn." (Scuttle Crab): the
     // turn this player may look at the other player's facedown cards, cards
     // hidden later that turn included (TriggerManager::onCardHidden shows
@@ -752,6 +752,11 @@ struct ChainItem {
         bool finalize_costs_paid = false;
     };
     std::vector<ExecutionChoices> repeat_choices;
+    // While an additional execution's choices are being made: those of the
+    // executions before it, the first one's included (GameEngine::
+    // chooseRepeatExecutions). Empty at any other time. For a card that says
+    // "one you haven't already chosen" (Card::modesOfOtherExecutions).
+    std::vector<ExecutionChoices> earlier_choices;
 
     // Phase 6q+ — snapshot of the TRIGGERING spell's total_energy_spent
     // when this trigger was added to the chain. Used by WhenYouPlaySpell

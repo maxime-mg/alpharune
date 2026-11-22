@@ -247,6 +247,21 @@ void setChoiceState(ChainItem& ri, uint32_t clear, uint32_t set) {
 }
 }  // namespace
 
+uint32_t Card::modesOfOtherExecutions(const CardContext& ctx) {
+    const auto& r = ctx.state.chain.resuming;
+    if (!r.has_value() || !r->finalizing) return 0;
+    uint32_t mask = 0;
+    for (const auto* others : {&r->earlier_choices, &r->repeat_choices})
+        for (const auto& c : *others) {
+            // As pickMode leaves it: its "answered" flag, the mode in [1].
+            if (c.resume_data.size() <= kChoiceStateSlot) continue;
+            if (!(static_cast<uint32_t>(c.resume_data[kChoiceStateSlot]) & kModeDone)) continue;
+            const int mode = c.resume_data[1];
+            if (mode >= 0 && mode < 32) mask |= 1u << mode;
+        }
+    return mask;
+}
+
 void Card::markCostUnpaid(CardContext& ctx) {
     auto& r = ctx.state.chain.resuming;
     if (r.has_value()) setChoiceState(*r, 0, kCostUnpaid);

@@ -1673,7 +1673,11 @@ void GameEngine::chooseRepeatExecutions(ChainItemId this_id) {
     try {
         for (int r = 0; r < repeats; ++r) {
             for (auto& ci : state_.chain.items)
-                if (ci.id == this_id) ci.finalize_costs_paid = false;   // a cost per execution
+                if (ci.id == this_id) {
+                    ci.finalize_costs_paid = false;   // a cost per execution
+                    ci.earlier_choices = extra;
+                    ci.earlier_choices.insert(ci.earlier_choices.begin(), first);
+                }
             makeNewChoicesFor(this_id);
             for (auto& ci : state_.chain.items)
                 if (ci.id == this_id) extra.push_back(snapshot(ci));
@@ -1687,6 +1691,7 @@ void GameEngine::chooseRepeatExecutions(ChainItemId this_id) {
         if (ci.id == this_id) {
             load(ci, first);
             ci.finalize_checked = 0;
+            ci.earlier_choices.clear();
             ci.repeat_choices = std::move(extra);
         }
 }
@@ -4387,12 +4392,13 @@ std::vector<GameEngine::RepeatTranche> GameEngine::repeatTranchesFor(PlayerId pl
             for (const auto& rc : sc->repeatCosts())
                 out.push_back({rc.energy, rc.power, resource::maskOf(rc.power_domain),
                                rc.discard_cards});
-    // GRANTED [Repeat] (when the spell has none of its own printed):
+    // GRANTED [Repeat], each beside whatever else the spell has: a spell with
+    // several instances can pay each of them (CR 820.3).
     //   The Academy (772) / Temporal Portal (401): "next spell gets [Repeat]
     //   equal to its (base) cost" (one-shot).
     //   Syndra, Transcendent (708): "your spells have [Repeat] [2][P]" (continuous
-    //   while she's in a showdown). The one-shot grant takes precedence.
-    if (card.isSpell() && out.empty()) {
+    //   while she's in a showdown).
+    if (card.isSpell()) {
         if (ps.grant_repeat_base_to_next_spell && card.card_def_id != kInvalidId) {
             // "[Repeat] equal to its base cost": Energy and Power both, the
             // Power payable in any of the spell's own Domains, as its base
@@ -4401,7 +4407,8 @@ std::vector<GameEngine::RepeatTranche> GameEngine::repeatTranchesFor(PlayerId pl
             if (base.energy_cost > 0 || base.power_cost > 0)
                 out.push_back({base.energy_cost, base.power_cost,
                                resource::maskOf(base.domains), 0});
-        } else if (ps.spells_have_repeat_energy > 0 || ps.spells_have_repeat_power > 0) {
+        }
+        if (ps.spells_have_repeat_energy > 0 || ps.spells_have_repeat_power > 0) {
             out.push_back({ps.spells_have_repeat_energy, ps.spells_have_repeat_power,
                            resource::maskOf(ps.spells_have_repeat_domain), 0});
         }
