@@ -2,9 +2,12 @@
 
 - **Priority:** P2
 - **Area:** Cards
-- **Status:** todo
+- **Status:** done
 - **Depends on:** nothing
 - **Blocks:** nothing
+
+## Re-check (2026-11-22, upstream `ec90f0f`)
+Upstream fixed this group: 4 of 5 cards match their text, checked by reading each class and the engine fields it sets, not by playing them. The Boss was fixed later, in [CARD-013](CARD-013-gaps-left-after-upstreams-card-fixes.md). The text below describes the old code.
 
 ## Why these belong together
 "Instead" and "the next time it would die" effects. Replacements still run on raw `ability_text` matching in `killUnit()`. Needs the structured `ReplacementEffect` type the engine notes call for.
@@ -12,13 +15,13 @@
 5 cards, 0 copies across the sample decks.
 
 ## Cards
-| Card | Set | Type | Status | Copies in sample decks | What is wrong |
+| Card | Set | Type | Status | Copies in sample decks | What was wrong at `b05e51d` |
 |---|---|---|---|---|---|
-| Endless Riches (`VEN-022/166`, id 809) | VEN | gear | partial-suspect |  | no code for: decision |
-| Smite (`UNL-007/219`, id 568) | UNL | spell | partial-documented |  | no engine hook; we apply the banish on the immediate lethal damage |
-| The Boss (`OGN-269/298`, id 264) | OGN | legend | partial-suspect |  | no code for: decision |
-| Unlicensed Armory (`OGN-023/298`, id 23) | OGN | gear | partial-documented |  | by the flag — the recall happens automatically (documented approximation). |
-| Zilean, Time Mage (`UNL-086/219`, id 648) | UNL | unit | partial-documented |  | turn). Approximated as automatic (token creation is not an agent decision |
+| Endless Riches (`VEN-022/166`, id 809) | VEN | gear | fixed upstream |  | no code for: decision |
+| Smite (`UNL-007/219`, id 568) | UNL | spell | fixed upstream |  | no engine hook; we apply the banish on the immediate lethal damage |
+| The Boss (`OGN-269/298`, id 264) | OGN | legend | fixed here, CARD-013 |  | no code for: decision |
+| Unlicensed Armory (`OGN-023/298`, id 23) | OGN | gear | fixed upstream |  | by the flag — the recall happens automatically (documented approximation). |
+| Zilean, Time Mage (`UNL-086/219`, id 648) | UNL | unit | fixed upstream |  | turn). Approximated as automatic (token creation is not an agent decision |
 
 ## Rules text
 - **Endless Riches**: When you play this, banish your hand and trash, then [Burn 7]. Skip your Draw Phase. You may play cards from your trash. If a card would go to your trash from anywhere other than your Main Deck, banish it instead.

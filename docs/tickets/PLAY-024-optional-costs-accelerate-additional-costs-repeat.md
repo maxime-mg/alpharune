@@ -8,3 +8,4 @@
 
 ## Scope
 - Yes or no prompts shown on the card being played, stating the cost.
+- Prompt kinds: `Accelerate`, `Repeat`, `AdditionalCost`, `DiscardCost`, `May`. They are asked before anything is paid.

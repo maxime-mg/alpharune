@@ -7,5 +7,5 @@
 - **Blocks:** nothing
 
 ## Scope
-- After the first unit is dropped, other eligible units show a "+" badge from the `move_group` prompt, and a "Move N units" button sends Done.
-- Shift-click or lasso before the drag replays the picks in the engine's order (increasing id).
+- After the first unit is dropped, other eligible units show a "+" badge from the `MoveJoin` prompt, and a "Move N units" button sends "Move no more units".
+- Shift-click or lasso before the drag answers the `MoveJoin` prompts one after another, matching each by the object it names (the options come in action-id order).

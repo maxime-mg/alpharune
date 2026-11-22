@@ -10,7 +10,10 @@
 Drag and drop has to match a gesture to exactly one legal intent. The client needs each intent's source, destination and targets without re-implementing the rules.
 
 ## Scope
-- Implement `LegalActionDesc` (declared, never implemented) and send `{index, type, label, source_ids, dest, target_ids, chosen_ids, value, flags}` per legal intent.
+- `src/core/legal_action.h` has only the `LegalActionDesc` types; nothing in the engine builds one. Build the descriptors in `play/` from the `Intent` and the state, and send `{index, type, label, source_ids, dest, target_ids, chosen_ids, value, flags}` per legal intent.
 
 ## Done when
 A fuzz test over random games shows every legal index has a descriptor that matches only that index.
+
+## Re-check (2026-11-22)
+Partly there: `legal[]` already carries `objects` and `location`, which is what click-to-move uses. For prompt answers (`MakeChoice`), PLAY-006's options give the role and index; this ticket is for plays, moves and activations. "Matches only that index" needs care: distinct intents can look the same to the player (two copies of a card), so identical-looking options may share a gesture.

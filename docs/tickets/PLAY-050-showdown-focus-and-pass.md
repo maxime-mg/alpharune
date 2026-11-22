@@ -8,3 +8,4 @@
 
 ## Scope
 - Battlefield banner with the focus holder, Action cards and abilities highlighted, and Pass for `PassFocus`. Show who has passed.
+- `NextStaged`: with two or more staged showdowns or combats, the turn player picks which battlefield goes first.

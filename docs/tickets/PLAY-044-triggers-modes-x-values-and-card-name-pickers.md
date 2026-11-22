@@ -8,3 +8,4 @@
 
 ## Scope
 - Optional triggers and triggered costs (place or decline, pay or decline), modes, X values limited to the offered values, and a card picker for `chosen_card_def`.
+- Prompt kinds: `May`, `Mode`, `XAmount`, `NameACard`, `TriggerOrder` (order simultaneous triggers), `ReplacementOrder`, `LookTop`, `DeckOrder`, `NewChoices`.

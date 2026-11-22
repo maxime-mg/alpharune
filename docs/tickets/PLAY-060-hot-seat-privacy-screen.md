@@ -8,3 +8,4 @@
 
 ## Scope
 - Two humans on one screen: a "pass the device" screen hides the hand between seats.
+- Builds on upstream's `--hot-seat`, where the frame follows whoever is deciding.

@@ -2,9 +2,12 @@
 
 - **Priority:** P1
 - **Area:** Cards
-- **Status:** todo
+- **Status:** done
 - **Depends on:** nothing
 - **Blocks:** nothing
+
+## Re-check (2026-11-22, upstream `ec90f0f`)
+Upstream fixed this group: 6 of 6 cards match their text, checked by reading each class and the engine fields it sets, not by playing them. The text below describes the old code.
 
 ## Why these belong together
 These cards ask another player to choose mid-resolution, and the code approximates the opponent's "rational pick" instead of asking them. Needs one engine path for asking a non-controller through `requestChoice`, then each card uses it.
@@ -12,14 +15,14 @@ These cards ask another player to choose mid-resolution, and the code approximat
 6 cards, 2 copies across the sample decks.
 
 ## Cards
-| Card | Set | Type | Status | Copies in sample decks | What is wrong |
+| Card | Set | Type | Status | Copies in sample decks | What was wrong at `b05e51d` |
 |---|---|---|---|---|---|
-| King's Edict (`OGN-237/298`, id 237) | OGN | spell | partial-documented | 2 | so we approximate their rational pick (lowest-Might unit they control). |
-| Call to Battle (`UNL-101/219`, id 663) | UNL | spell | partial-documented |  | agent; approximate their rational pick (highest-Might unit not |
-| Divine Judgment (`OGN-244/298`, id 244) | OGN | spell | partial-documented |  | The "which 2 to keep" is the player's choice; approximated here by |
-| Promising Future (`OGN-115/298`, id 115) | OGN | spell | partial-documented |  | (Power cost approximated as free.) |
-| Safety Inspector (`UNL-164/219`, id 726) | UNL | unit | partial-documented |  | OPPONENT's forced kill is approximated as their rational pick — lowest-Might |
-| Shard of Undoing (`UNL-174/219`, id 736) | UNL | gear | partial-documented |  | through this controller's agent, so approximate the rational pick |
+| King's Edict (`OGN-237/298`, id 237) | OGN | spell | fixed upstream | 2 | so we approximate their rational pick (lowest-Might unit they control). |
+| Call to Battle (`UNL-101/219`, id 663) | UNL | spell | fixed upstream |  | agent; approximate their rational pick (highest-Might unit not |
+| Divine Judgment (`OGN-244/298`, id 244) | OGN | spell | fixed upstream |  | The "which 2 to keep" is the player's choice; approximated here by |
+| Promising Future (`OGN-115/298`, id 115) | OGN | spell | fixed upstream |  | (Power cost approximated as free.) |
+| Safety Inspector (`UNL-164/219`, id 726) | UNL | unit | fixed upstream |  | OPPONENT's forced kill is approximated as their rational pick — lowest-Might |
+| Shard of Undoing (`UNL-174/219`, id 736) | UNL | gear | fixed upstream |  | through this controller's agent, so approximate the rational pick |
 
 ## Rules text
 - **Call to Battle**: Move a unit you control to a battlefield you control. Then, choose an opponent. They move a unit they control to the same battlefield.

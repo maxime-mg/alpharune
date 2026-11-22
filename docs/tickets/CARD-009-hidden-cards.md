@@ -2,9 +2,12 @@
 
 - **Priority:** P2
 - **Area:** Cards
-- **Status:** todo
+- **Status:** done
 - **Depends on:** nothing
 - **Blocks:** nothing
+
+## Re-check (2026-11-22, upstream `ec90f0f`)
+Upstream fixed this group: 5 of 5 cards match their text, checked by reading each class and the engine fields it sets, not by playing them. Bandle Tree had no test; CARD-013 added one. The text below describes the old code.
 
 ## Why these belong together
 Rules about hiding: extra hide slots, alternate hide costs, "can't be revealed here", hiding ignoring costs, and a card with a deck-construction exception.
@@ -12,13 +15,13 @@ Rules about hiding: extra hide slots, alternate hide costs, "can't be revealed h
 5 cards, 3 copies across the sample decks.
 
 ## Cards
-| Card | Set | Type | Status | Copies in sample decks | What is wrong |
+| Card | Set | Type | Status | Copies in sample decks | What was wrong at `b05e51d` |
 |---|---|---|---|---|---|
-| Guerilla Warfare (`OGN-264/298`, id 260) | OGN | spell | partial-documented | 2 | TODO: "You can hide cards ignoring costs this turn." — the engine |
-| Swift Scout (`OGN-263/298`, id 259) | OGN | legend | partial-documented | 1 | ENGINE GAP: hide-cost is an alternative-cost modifier with no card-side |
-| Bandle Tree (`OGN-278/298`, id 273) | OGN | battlefield | partial-suspect |  | no code for: decision |
-| Noxus Saboteur (`OGN-018/298`, id 18) | OGN | unit | partial-documented |  | currently INERT — it is the faithful state representation, ready for the |
-| Spiderling (`VEN-097/166`, id 884) | VEN | unit | not-implemented |  | rules text but no behaviour in the class |
+| Guerilla Warfare (`OGN-264/298`, id 260) | OGN | spell | fixed upstream | 2 | TODO: "You can hide cards ignoring costs this turn." — the engine |
+| Swift Scout (`OGN-263/298`, id 259) | OGN | legend | fixed upstream | 1 | ENGINE GAP: hide-cost is an alternative-cost modifier with no card-side |
+| Bandle Tree (`OGN-278/298`, id 273) | OGN | battlefield | fixed upstream |  | no code for: decision |
+| Noxus Saboteur (`OGN-018/298`, id 18) | OGN | unit | fixed upstream |  | currently INERT — it is the faithful state representation, ready for the |
+| Spiderling (`VEN-097/166`, id 884) | VEN | unit | fixed upstream |  | rules text but no behaviour in the class |
 
 ## Rules text
 - **Bandle Tree**: You may hide an additional card here.

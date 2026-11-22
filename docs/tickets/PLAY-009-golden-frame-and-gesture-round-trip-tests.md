@@ -7,7 +7,8 @@
 - **Blocks:** [PLAY-013](PLAY-013-board-parity-test-against-the-text-view.md)
 
 ## Scope
-- Golden JSON frames for one decision of each prompt kind, from seeded scripted games.
+- Golden JSON frames for one decision of each `PromptKind` that seeded games reach.
+- `play/tests/` already covers the protocol (seats, tokens, stale clicks); these tests add frame contents.
 - Round-trip: for every legal index, the descriptor-driven matcher returns that index.
 
 ## Done when

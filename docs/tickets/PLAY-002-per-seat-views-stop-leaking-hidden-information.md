@@ -9,11 +9,14 @@
 ## Why
 Every client currently gets both hands and the order of both main decks and rune decks.
 
-## Scope
-- Each WebSocket connection picks a seat: `p1`, `p2`, `spectator` or `god`.
-- Hidden zones become counts plus card backs. Face-down cards show only to their controller.
-- `god` sees everything and is only allowed when god mode is on.
-- The per-seat view is built in one place (`play/src/board_view.cpp`), not spread across the server.
+## Done
+- With two human seats the server is seat-bound: a connection claims `P1` or `P2` with a `seat` message and gets only that player's view. `--hot-seat` turns this off for two players on one screen.
+- With `--god-mode off`, hidden zones are counts plus card backs, face-down cards show only to their controller, and log lines are filtered by `LogAudience`.
+- The view is built in `play/src/board_view.cpp`.
+
+The client no longer picks `god` or `spectator`. A connection that claims no seat on a seat-bound server is a spectator and sees neither hand; whether everything is revealed is the server's `reveal_hidden`.
+
+**Caveat:** god mode is on by default when a seat is human, so everything is revealed unless the game is started with `--god-mode off`. See [play-ui-followups.md](../play-ui-followups.md); changing the default is a decision for the owner.
 
 ## Done when
-A `p1` frame contains no card names or ids from P2's hand, main deck or rune deck, or from P2's face-down cards. Covered by a unit test.
+With god mode off, a P1 frame contains no card names or ids from P2's hand, main deck or rune deck, or from P2's face-down cards. Covered by a unit test.

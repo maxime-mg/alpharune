@@ -8,8 +8,11 @@
 
 ## Scope
 - Forward EventBus events (moves, draws, plays, channels, damage, deaths, score, control, contest, combat and showdown, chain, reveals, stun, ready, phase, game over) as `events[]` between decisions.
-- Filter per seat: an opponent's draw is "drew 1", not the card.
+- Filter per seat: an opponent's draw is "drew 1", not the card. Log lines already carry a `LogAudience` (`visibleTo(player)`); the events themselves do not, so use `knowledge::identityVisible` before naming a card.
 - Render each event as a sentence for the log panel.
 
 ## Done when
 The log panel shows a human-readable line for every event in a full game, and no hidden card name reaches the wrong seat.
+
+## Re-check (2026-11-22)
+Still to do. `play/src/main.cpp` connects only `on_log` and `on_phase_changed`.

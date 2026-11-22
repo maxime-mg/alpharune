@@ -2,9 +2,12 @@
 
 - **Priority:** P1
 - **Area:** Cards
-- **Status:** todo
+- **Status:** done
 - **Depends on:** nothing
 - **Blocks:** nothing
+
+## Re-check (2026-11-22, upstream `ec90f0f`)
+Upstream fixed this group: 15 of 16 cards match their text, checked by reading each class and the engine fields it sets, not by playing them. Crescent Guardian was fixed later, in [CARD-013](CARD-013-gaps-left-after-upstreams-card-fixes.md). The text below describes the old code.
 
 ## Why these belong together
 Kill a unit, return a gear, spend a buff or XP as a cost, and costs that change with game state. `optionalAdditionalCost()` only pays energy and power today. Needs a structured additional-cost type the action generator and payment path understand.
@@ -12,24 +15,24 @@ Kill a unit, return a gear, spend a buff or XP as a cost, and costs that change 
 16 cards, 3 copies across the sample decks.
 
 ## Cards
-| Card | Set | Type | Status | Copies in sample decks | What is wrong |
+| Card | Set | Type | Status | Copies in sample decks | What was wrong at `b05e51d` |
 |---|---|---|---|---|---|
-| Poro Snax (`SFD-046/221`, id 369) | SFD | gear | partial-documented | 3 | [1][G], [E], Kill this. Approximated as [1] energy + exhaust |
-| Atakhan (`UNL-170/219`, id 732) | UNL | unit | partial-documented |  | ENGINE GAP: this is an OPTIONAL non-resource additional cost (kill a |
-| Commander Ledros (`OGN-231/298`, id 231) | OGN | unit | not-implemented |  | rules text but no behaviour in the class |
-| Crescent Guardian (`UNL-122/219`, id 684) | UNL | unit | partial-documented |  | The "played a spell this turn" precondition cannot be enforced on the |
-| Cruel Patron (`OGN-208/298`, id 208) | OGN | unit | partial-documented |  | NOTE: there is no engine hook for a "kill a unit" additional play cost, |
-| Heedless Resurrection (`UNL-142/219`, id 704) | UNL | spell | partial-documented |  | has no structured non-resource additional-cost surface for spells). Pick the |
-| Irelia, Graceful (`SFD-141/221`, id 462) | SFD | unit | partial-suspect |  | no code for: decision |
-| Kraken Hunter (`OGN-150/298`, id 150) | OGN | unit | not-implemented |  | rules text but no behaviour in the class |
-| Legion Quartermaster (`SFD-044/221`, id 367) | SFD | unit | partial-documented |  | owner's hand." Mandatory additional cost. The engine has no structured |
-| Master Yi, Unstoppable (`UNL-059/219`, id 621) | UNL | unit | partial-documented |  | power portion of each tier is an ENGINE GAP and is NOT applied here. |
-| Needlessly Large Yordle (`SFD-055/221`, id 378) | SFD | unit | partial-documented |  | discount — 1 Order power per hold point — cannot be expressed. The engine |
-| Poppy, Defender of the Meek (`UNL-178/219`, id 740) | UNL | unit | partial-documented |  | play-cost-reduction hook) + an XP deduction at play. APPROXIMATION: the |
-| Spoils of War (`OGN-144/298`, id 144) | OGN | spell | partial-documented |  | APPROXIMATION: there is no turn-scoped death tracker in GameState, so |
-| Stalking Wolf (`UNL-166/219`, id 728) | UNL | unit | partial-documented |  | agent-chosen Bird/Cat/Dog/Poro. APPROXIMATIONS / ENGINE GAP: |
-| Undying Loyalty (`UNL-168/219`, id 730) | UNL | spell | partial-documented |  | clause is approximated as no Power gate — no structured Power-budget hook). |
-| Wallop (`OGN-146/298`, id 146) | OGN | spell | partial-documented |  | ENGINE LIMITATION: optionalAdditionalCost() only pays energy/power and |
+| Poro Snax (`SFD-046/221`, id 369) | SFD | gear | fixed upstream | 3 | [1][G], [E], Kill this. Approximated as [1] energy + exhaust |
+| Atakhan (`UNL-170/219`, id 732) | UNL | unit | fixed upstream |  | ENGINE GAP: this is an OPTIONAL non-resource additional cost (kill a |
+| Commander Ledros (`OGN-231/298`, id 231) | OGN | unit | fixed upstream |  | rules text but no behaviour in the class |
+| Crescent Guardian (`UNL-122/219`, id 684) | UNL | unit | fixed here, CARD-013 |  | The "played a spell this turn" precondition cannot be enforced on the |
+| Cruel Patron (`OGN-208/298`, id 208) | OGN | unit | fixed upstream |  | NOTE: there is no engine hook for a "kill a unit" additional play cost, |
+| Heedless Resurrection (`UNL-142/219`, id 704) | UNL | spell | fixed upstream |  | has no structured non-resource additional-cost surface for spells). Pick the |
+| Irelia, Graceful (`SFD-141/221`, id 462) | SFD | unit | fixed upstream |  | no code for: decision |
+| Kraken Hunter (`OGN-150/298`, id 150) | OGN | unit | fixed upstream |  | rules text but no behaviour in the class |
+| Legion Quartermaster (`SFD-044/221`, id 367) | SFD | unit | fixed upstream |  | owner's hand." Mandatory additional cost. The engine has no structured |
+| Master Yi, Unstoppable (`UNL-059/219`, id 621) | UNL | unit | fixed upstream |  | power portion of each tier is an ENGINE GAP and is NOT applied here. |
+| Needlessly Large Yordle (`SFD-055/221`, id 378) | SFD | unit | fixed upstream |  | discount — 1 Order power per hold point — cannot be expressed. The engine |
+| Poppy, Defender of the Meek (`UNL-178/219`, id 740) | UNL | unit | fixed upstream |  | play-cost-reduction hook) + an XP deduction at play. APPROXIMATION: the |
+| Spoils of War (`OGN-144/298`, id 144) | OGN | spell | fixed upstream |  | APPROXIMATION: there is no turn-scoped death tracker in GameState, so |
+| Stalking Wolf (`UNL-166/219`, id 728) | UNL | unit | fixed upstream |  | agent-chosen Bird/Cat/Dog/Poro. APPROXIMATIONS / ENGINE GAP: |
+| Undying Loyalty (`UNL-168/219`, id 730) | UNL | spell | fixed upstream |  | clause is approximated as no Power gate — no structured Power-budget hook). |
+| Wallop (`OGN-146/298`, id 146) | OGN | spell | fixed upstream |  | ENGINE LIMITATION: optionalAdditionalCost() only pays energy/power and |
 
 ## Rules text
 - **Atakhan**: You may kill a friendly unit as an additional cost to play me. If you do, I cost [1] less for each Energy it costs and [Y] less for each Power it costs. [Ganking] (I can move from battlefield to battlefield.) When I attack, the defender must kill one of their units here.

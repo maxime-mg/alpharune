@@ -263,8 +263,8 @@ upstream:
 * **Play server.** Upstream added seat-bound sessions, park-gated state
   access, fair-play frames, origin and token checks, a spectator mode and
   `decision_id` checks on `choose`. These overlap PLAY-002, PLAY-004 and
-  PLAY-005; those tickets need re-checking against upstream before any
-  work on them. `play/src/play_server.cpp` is now upstream's server, moved
+  PLAY-005, which were re-checked on 2026-11-22: 002 is done differently,
+  004 and 005 are done. `play/src/play_server.cpp` is now upstream's server, moved
   to `play/`, plus: the board page from `--web-root` at `/` (falling back to
   the embedded page when there is none), the embedded page at `/classic`,
   `board` in every frame (built with the frame's own visibility), and

@@ -16,3 +16,6 @@ All 145 Radiance cards are missing: none has a class in `src/cards/`. The galler
 
 ## Done when
 The Radiance cards are registered, `--dump-registry` lists them with the right type and domain, and `scripts/card_status.py` reports them as not implemented rather than "no class".
+
+## Re-check (2026-11-22)
+Still to do: upstream `ec90f0f` (2026-10-15) predates the release and has no Radiance class or keyword (Deploy, Disarm, Show Off), and `cards/card_index.json` is unchanged. Upstream did reserve ids 956 to 1165 for Radiance (210 ids) in the feature layout, so use those and do not change `kCardVocabSize`. Cards are hand-authored C++: there is no generator to extend, and each new class needs a line in `cards_init.cpp`.

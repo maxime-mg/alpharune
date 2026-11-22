@@ -2,9 +2,12 @@
 
 - **Priority:** P0
 - **Area:** Cards
-- **Status:** todo
+- **Status:** done
 - **Depends on:** nothing
 - **Blocks:** nothing
+
+## Re-check (2026-11-22, upstream `ec90f0f`)
+Upstream fixed this group: 8 of 9 cards match their text, checked by reading each class and the engine fields it sets, not by playing them. Apprentice Smith was fixed later, in [CARD-013](CARD-013-gaps-left-after-upstreams-card-fixes.md). The text below describes the old code.
 
 ## Why these belong together
 These cards run but do the wrong thing, and the audit confirmed it by reading the code. Most are small, local fixes.
@@ -12,17 +15,17 @@ These cards run but do the wrong thing, and the audit confirmed it by reading th
 9 cards, 14 copies across the sample decks.
 
 ## Cards
-| Card | Set | Type | Status | Copies in sample decks | What is wrong |
+| Card | Set | Type | Status | Copies in sample decks | What was wrong at `b05e51d` |
 |---|---|---|---|---|---|
-| Ashe, Focused (`UNL-169/219`, id 731) | UNL | unit | partial-confirmed | 10 | 'When they hold, return it to their hand' is missing |
-| Eager Apprentice (`OGN-084/298`, id 84) | OGN | unit | partial-confirmed | 2 | Discount has no spell-only condition, so units and gear get it too |
-| Eclipse (`UNL-063/219`, id 625) | UNL | spell | partial-confirmed | 2 | [Predict] is only a keyword bit; nothing performs it |
-| Apprentice Smith (`SFD-041/221`, id 364) | SFD | unit | partial-confirmed |  | Moves the gear to hand directly, so draw triggers do not fire |
-| Baited Hook (`OGN-242/298`, id 242) | OGN | gear | partial-confirmed |  | [C] power is not charged, and the cost recycles the gear, which is not printed |
-| Ekko, Recurrent (`OGN-110/298`, id 110) | OGN | unit | partial-confirmed |  | Readies your runes but never recycles itself |
-| Forge of the Future (`OGN-212/298`, id 212) | OGN | gear | partial-confirmed |  | Play trigger kills targets[0] instead of making a Recruit; 'Kill this: recycle up to 4' is absent |
-| Keeper of the Hammer (`UNL-203/219`, id 759) | UNL | legend | partial-confirmed |  | Gains XP on conquer as well as hold |
-| Scorchclaw (`UNL-016/219`, id 578) | UNL | unit | partial-confirmed |  | Hunt XP is gated behind xp>=3, so it never starts; Level 3 +1 [M] and enter-ready are missing |
+| Ashe, Focused (`UNL-169/219`, id 731) | UNL | unit | fixed upstream | 10 | 'When they hold, return it to their hand' is missing |
+| Eager Apprentice (`OGN-084/298`, id 84) | OGN | unit | fixed upstream | 2 | Discount has no spell-only condition, so units and gear get it too |
+| Eclipse (`UNL-063/219`, id 625) | UNL | spell | fixed upstream | 2 | [Predict] is only a keyword bit; nothing performs it |
+| Apprentice Smith (`SFD-041/221`, id 364) | SFD | unit | fixed here, CARD-013 |  | Moves the gear to hand directly, so draw triggers do not fire |
+| Baited Hook (`OGN-242/298`, id 242) | OGN | gear | fixed upstream |  | [C] power is not charged, and the cost recycles the gear, which is not printed |
+| Ekko, Recurrent (`OGN-110/298`, id 110) | OGN | unit | fixed upstream |  | Readies your runes but never recycles itself |
+| Forge of the Future (`OGN-212/298`, id 212) | OGN | gear | fixed upstream |  | Play trigger kills targets[0] instead of making a Recruit; 'Kill this: recycle up to 4' is absent |
+| Keeper of the Hammer (`UNL-203/219`, id 759) | UNL | legend | fixed upstream |  | Gains XP on conquer as well as hold |
+| Scorchclaw (`UNL-016/219`, id 578) | UNL | unit | fixed upstream |  | Hunt XP is gated behind xp>=3, so it never starts; Level 3 +1 [M] and enter-ready are missing |
 
 ## Rules text
 - **Apprentice Smith**: When I move, reveal the top card of your Main Deck. If it's a gear, draw it. Otherwise, recycle it.

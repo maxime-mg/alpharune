@@ -18,3 +18,6 @@
 
 ## Done when
 For any state reached in scripted games, every field `StateRenderer` prints is present in the frame.
+
+## Re-check (2026-11-22)
+Still holds for what the text view prints. Upstream has since added restricted pool fields that neither view shows: `spell_energy`, `showdown_energy`, `spell_power` and `gear_power` (the frame has only `unit_energy`). Added to [PLAY-023](PLAY-023-pay-costs-by-clicking-runes.md), which needs them.

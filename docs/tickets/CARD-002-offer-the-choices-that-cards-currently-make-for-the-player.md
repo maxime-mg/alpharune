@@ -2,9 +2,12 @@
 
 - **Priority:** P0
 - **Area:** Cards
-- **Status:** todo
+- **Status:** done
 - **Depends on:** nothing
 - **Blocks:** nothing
+
+## Re-check (2026-11-22, upstream `ec90f0f`)
+Upstream fixed this group: 12 of 12 cards match their text, checked by reading each class and the engine fields it sets, not by playing them. The text below describes the old code.
 
 ## Why these belong together
 Each of these cards says "you may" or "choose", but the code takes the first option. The `confirmOptional`, `pickTarget` and `pickMode` helpers already exist, so these are mostly mechanical.
@@ -12,20 +15,20 @@ Each of these cards says "you may" or "choose", but the code takes the first opt
 12 cards, 19 copies across the sample decks.
 
 ## Cards
-| Card | Set | Type | Status | Copies in sample decks | What is wrong |
+| Card | Set | Type | Status | Copies in sample decks | What was wrong at `b05e51d` |
 |---|---|---|---|---|---|
-| Elder Dragon (`UNL-118/219`, id 680) | UNL | unit | partial-confirmed | 7 | Hits the first enemy at each location; 'choose up to one' offers no choice |
-| Grim Apothecary (`UNL-021/219`, id 583) | UNL | unit | partial-confirmed | 7 | Auto-picks the first friendly unit at a battlefield; the target is not offered |
-| Disposal Order (`UNL-103/219`, id 665) | UNL | spell | partial-documented | 3 | documented approximation: take the most recent up to 3). |
-| Ornn, Blacksmith (`SFD-058/221`, id 381) | SFD | unit | partial-confirmed | 1 | Takes the first gear with no choice ('you may reveal' is not offered) |
-| The Candlelit Sanctum (`OGN-291/298`, id 286) | OGN | battlefield | partial-suspect | 1 | no code for: decision |
-| Azir, Sovereign (`SFD-177/221`, id 497) | SFD | unit | partial-confirmed |  | Moves every token; 'you may move any number' offers no choice |
-| Buhru Captain (`SFD-091/221`, id 413) | SFD | unit | partial-confirmed |  | Always draws; the 'or buff me' choice is missing |
-| Double Trouble (`UNL-032/219`, id 594) | UNL | spell | partial-confirmed |  | Takes the first unit with no choice ('you may reveal' is not offered) |
-| Hallowed Tomb (`OGN-281/298`, id 276) | OGN | battlefield | partial-confirmed |  | Forced, not 'you may', and takes any champion rather than your Chosen Champion |
-| On the Hunt (`SFD-204/221`, id 518) | SFD | spell | partial-confirmed |  | Readies one chosen unit; the card readies all your units |
-| Rift Herald (`UNL-179/219`, id 741) | UNL | unit | partial-documented |  | Agent-choice of WHICH unit approximated: draw the first revealed unit. |
-| Void Rush (`SFD-188/221`, id 505) | SFD | spell | partial-confirmed |  | Takes the first playable card; 'you may banish one' offers no choice |
+| Elder Dragon (`UNL-118/219`, id 680) | UNL | unit | fixed upstream | 7 | Hits the first enemy at each location; 'choose up to one' offers no choice |
+| Grim Apothecary (`UNL-021/219`, id 583) | UNL | unit | fixed upstream | 7 | Auto-picks the first friendly unit at a battlefield; the target is not offered |
+| Disposal Order (`UNL-103/219`, id 665) | UNL | spell | fixed upstream | 3 | documented approximation: take the most recent up to 3). |
+| Ornn, Blacksmith (`SFD-058/221`, id 381) | SFD | unit | fixed upstream | 1 | Takes the first gear with no choice ('you may reveal' is not offered) |
+| The Candlelit Sanctum (`OGN-291/298`, id 286) | OGN | battlefield | fixed upstream | 1 | no code for: decision |
+| Azir, Sovereign (`SFD-177/221`, id 497) | SFD | unit | fixed upstream |  | Moves every token; 'you may move any number' offers no choice |
+| Buhru Captain (`SFD-091/221`, id 413) | SFD | unit | fixed upstream |  | Always draws; the 'or buff me' choice is missing |
+| Double Trouble (`UNL-032/219`, id 594) | UNL | spell | fixed upstream |  | Takes the first unit with no choice ('you may reveal' is not offered) |
+| Hallowed Tomb (`OGN-281/298`, id 276) | OGN | battlefield | fixed upstream |  | Forced, not 'you may', and takes any champion rather than your Chosen Champion |
+| On the Hunt (`SFD-204/221`, id 518) | SFD | spell | fixed upstream |  | Readies one chosen unit; the card readies all your units |
+| Rift Herald (`UNL-179/219`, id 741) | UNL | unit | fixed upstream |  | Agent-choice of WHICH unit approximated: draw the first revealed unit. |
+| Void Rush (`SFD-188/221`, id 505) | SFD | spell | fixed upstream |  | Takes the first playable card; 'you may banish one' offers no choice |
 
 ## Rules text
 - **Azir, Sovereign**: [Accelerate] (You may pay [1][Y] as an additional cost to have me enter ready.) When I attack, you may move any number of your token units to this battlefield.

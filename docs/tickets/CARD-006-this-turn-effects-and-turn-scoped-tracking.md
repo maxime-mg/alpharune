@@ -2,9 +2,12 @@
 
 - **Priority:** P1
 - **Area:** Cards
-- **Status:** todo
+- **Status:** done
 - **Depends on:** nothing
 - **Blocks:** nothing
+
+## Re-check (2026-11-22, upstream `ec90f0f`)
+Upstream fixed this group: 9 of 10 cards match their text, checked by reading each class and the engine fields it sets, not by playing them. Temporal Portal was fixed later, in [CARD-013](CARD-013-gaps-left-after-upstreams-card-fixes.md). The text below describes the old code.
 
 ## Why these belong together
 Units that enter ready this turn, delayed abilities that should fire more than once, and "if you've done X this turn" checks. Needs per-player, per-turn flags and counters in `GameState` that reset in the expiration step.
@@ -12,18 +15,18 @@ Units that enter ready this turn, delayed abilities that should fire more than o
 10 cards, 4 copies across the sample decks.
 
 ## Cards
-| Card | Set | Type | Status | Copies in sample decks | What is wrong |
+| Card | Set | Type | Status | Copies in sample decks | What was wrong at `b05e51d` |
 |---|---|---|---|---|---|
-| Confront (`OGN-129/298`, id 129) | OGN | spell | partial-documented | 4 | ENGINE LIMITATION: there is no per-player "units enter ready this |
-| Bushwhack (`SFD-004/221`, id 327) | SFD | spell | partial-documented |  | so we approximate by readying the controller's currently-on-board |
-| Dancing Grenade (`UNL-020/219`, id 582) | UNL | spell | partial-documented |  | The recast-for-[A] loop has no engine "may play this again + charge [A]" |
-| Lillia, Protector of Dreams (`UNL-058/219`, id 620) | UNL | unit | partial-documented |  | this turn" is an ENGINE GAP — tokens enter via EffectExecutor::createToken |
-| Magma Wurm (`OGN-011/298`, id 11) | OGN | unit | not-implemented |  | rules text but no behaviour in the class |
-| Prepared Neophyte (`UNL-004/219`, id 563) | UNL | unit | partial-documented |  | this turn (reset at end of turn). Approximation: any single spell of |
-| Rally the Troops (`SFD-166/221`, id 487) | SFD | spell | partial-documented |  | ENGINE GAP: the delayed-ability mechanism is one-shot (fires once |
-| Stand United (`OGN-053/298`, id 53) | OGN | spell | partial-documented |  | ENGINE GAP: there is no buff-amplification hook (a per-player field that |
-| Temporal Portal (`SFD-078/221`, id 401) | SFD | gear | partial-documented |  | with a magnitude equal to its own cost — has no engine primitive: there |
-| Wuju Master (`UNL-231/219`, id 784) | UNL | legend | partial-documented |  | that engine gap is closed. |
+| Confront (`OGN-129/298`, id 129) | OGN | spell | fixed upstream | 4 | ENGINE LIMITATION: there is no per-player "units enter ready this |
+| Bushwhack (`SFD-004/221`, id 327) | SFD | spell | fixed upstream |  | so we approximate by readying the controller's currently-on-board |
+| Dancing Grenade (`UNL-020/219`, id 582) | UNL | spell | fixed upstream |  | The recast-for-[A] loop has no engine "may play this again + charge [A]" |
+| Lillia, Protector of Dreams (`UNL-058/219`, id 620) | UNL | unit | fixed upstream |  | this turn" is an ENGINE GAP — tokens enter via EffectExecutor::createToken |
+| Magma Wurm (`OGN-011/298`, id 11) | OGN | unit | fixed upstream |  | rules text but no behaviour in the class |
+| Prepared Neophyte (`UNL-004/219`, id 563) | UNL | unit | fixed upstream |  | this turn (reset at end of turn). Approximation: any single spell of |
+| Rally the Troops (`SFD-166/221`, id 487) | SFD | spell | fixed upstream |  | ENGINE GAP: the delayed-ability mechanism is one-shot (fires once |
+| Stand United (`OGN-053/298`, id 53) | OGN | spell | fixed upstream |  | ENGINE GAP: there is no buff-amplification hook (a per-player field that |
+| Temporal Portal (`SFD-078/221`, id 401) | SFD | gear | fixed here, CARD-013 |  | with a magnitude equal to its own cost — has no engine primitive: there |
+| Wuju Master (`UNL-231/219`, id 784) | UNL | legend | fixed upstream |  | that engine gap is closed. |
 
 ## Rules text
 - **Bushwhack**: [Hidden] (Hide now for [A] to react with later for .) Friendly units enter ready this turn. Play a Gold gear token exhausted.

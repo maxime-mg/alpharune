@@ -37,32 +37,12 @@ NOT_DONE = ORDER[:4]
 
 # Verdicts from reading the card against its class. Keep a verdict here until
 # the card is fixed; delete it in the commit that fixes the card.
-CONFIRMED = {
-    84:  "Discount has no spell-only condition, so units and gear get it too",
-    110: "Readies your runes but never recycles itself",
-    212: "Play trigger kills targets[0] instead of making a Recruit; 'Kill this: recycle up to 4' is absent",
-    276: "Forced, not 'you may', and takes any champion rather than your Chosen Champion",
-    242: "[C] power is not charged, and the cost recycles the gear, which is not printed",
-    364: "Moves the gear to hand directly, so draw triggers do not fire",
-    381: "Takes the first gear with no choice ('you may reveal' is not offered)",
-    396: "'I am a Mech' is not applied: the tag is never granted",
-    413: "Always draws; the 'or buff me' choice is missing",
-    497: "Moves every token; 'you may move any number' offers no choice",
-    505: "Takes the first playable card; 'you may banish one' offers no choice",
-    508: "Attached 'deal 3 Bonus Damage' is never applied: only Annie sets bonus_damage_dealt",
-    518: "Readies one chosen unit; the card readies all your units",
-    578: "Hunt XP is gated behind xp>=3, so it never starts; Level 3 +1 [M] and enter-ready are missing",
-    583: "Auto-picks the first friendly unit at a battlefield; the target is not offered",
-    594: "Takes the first unit with no choice ('you may reveal' is not offered)",
-    625: "[Predict] is only a keyword bit; nothing performs it",
-    680: "Hits the first enemy at each location; 'choose up to one' offers no choice",
-    731: "'When they hold, return it to their hand' is missing",
-    759: "Gains XP on conquer as well as hold",
-}
+CONFIRMED = {}
 # Flagged by the heuristic, read, and found correct.
 REVIEWED_OK = {
-    12, 25, 79, 165, 170, 236, 243, 308, 341, 347, 358, 380, 449, 547, 693, 709,
-    729, 762, 823, 873, 876, 885, 900,
+    12, 25, 79, 150, 161, 165, 170, 174, 176, 193, 194, 231, 236, 243, 250, 260, 264, 273,
+    286, 308, 341, 347, 358, 380, 384, 415, 449, 462, 463, 547, 587, 648, 693, 709, 726,
+    728, 729, 731, 732, 740, 762, 809, 823, 873, 876, 885, 900,
 }
 
 # A comment admitting the card does less than it prints. Deliberately narrower
@@ -73,7 +53,7 @@ GAP = re.compile(
     r"cannot fire|no engine (hook|trigger|site|primitive)|has no engine|"
     r"no structured|not plumbed|needs engine|requires? engine|is not modelled)")
 # Comments that match GAP but describe something already fixed or not a gap.
-GAP_NOT = re.compile(r"(?i)(was approximated|no engine behind it|does not yet fire in tests)")
+GAP_NOT = re.compile(r"(?i)(was approximated|power cost approximated as free|no engine behind it|does not yet fire in tests)")
 
 # Printed verb -> code that would have to exist. Applied to rules text with
 # reminder text removed, and matched against the class body without its CardDef.
@@ -289,7 +269,7 @@ def main():
     rows.sort(key=lambda r: (ORDER.index(r["status"]), -r["deck_copies"], r["id"] or 9999, r["name"]))
     OUT.mkdir(parents=True, exist_ok=True)
     with open(OUT / "card-status.csv", "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w = csv.DictWriter(f, fieldnames=list(rows[0]), lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
     write_report(rows)
@@ -350,7 +330,7 @@ def write_report(rows):
             "adjudicating against `errata/` before behaviour changes.", "",
             table(drift, [("id", "id"), ("name", "name"), ("stat diff", "stat_drift"),
                           ("text differs", "text_drift"), ("status", "status")]).rstrip(), ""]
-    (OUT / "README.md").write_text("\n".join(out), encoding="utf-8")
+    (OUT / "README.md").write_text("\n".join(out), encoding="utf-8", newline="\n")
 
     for s in ORDER:
         print(f"{s:22}{total[s]:5}")

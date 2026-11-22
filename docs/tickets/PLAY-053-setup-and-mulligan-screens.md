@@ -8,3 +8,4 @@
 
 ## Scope
 - Battlefield choice, play first or second, sideboard swap, and mulligan as card selection mapped to the offered subsets.
+- Battlefield choice exists only with `--game-mode match` (`BattlefieldSetup`). In a Duel, the default, the engine draws each player's battlefield at random.
