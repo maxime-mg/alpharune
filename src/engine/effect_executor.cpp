@@ -782,6 +782,9 @@ resource::RuneChooser EffectExecutor::runeChooser() const {
     if (!agent_query_ || events_.quiet()) return c;
     c.pick = [this](PlayerId player, const std::vector<GameObjectId>& options,
                     bool for_power) -> GameObjectId {
+        // A concession at an earlier point of the payment (or before it):
+        // nobody is asked any more, the rest is paid in the engine's order.
+        if (state_.game_over) return options.front();
         std::vector<Intent> intents;
         intents.reserve(options.size());
         for (auto id : options) {
@@ -800,6 +803,7 @@ resource::RuneChooser EffectExecutor::runeChooser() const {
                                                             : "pick rune to exhaust for energy",
                                   for_power ? PromptKind::RuneForPower : PromptKind::RuneForEnergy,
                                   std::source_location::current());
+        if (state_.game_over) return options.front();   // a concession names no rune
         return chosen.chosen_objects.empty() ? kInvalidId : chosen.chosen_objects.front();
     };
     return c;
@@ -893,7 +897,7 @@ bool EffectExecutor::addForPayment(PlayerId player, int energy, int power,
             if (!viable.empty()) adds = std::move(viable);
         }
         Intent pick = adds.front();
-        if (adds.size() > 1 && agent_query_ && !events_.quiet()) {
+        if (adds.size() > 1 && agent_query_ && !events_.quiet() && !state_.game_over) {
             for (auto& a : adds) {
                 const GameObjectId src = a.ability_source;
                 a.choice_label = "[Add] for this payment: " +
@@ -902,6 +906,9 @@ bool EffectExecutor::addForPayment(PlayerId player, int energy, int power,
             }
             pick = ask(player, adds, "activate an [Add] ability to pay", PromptKind::AddForPayment,
                        std::source_location::current());
+            // A concession names no ability: the engine's order, so that a
+            // payment judged payable is still made.
+            if (state_.game_over) pick = adds.front();
         }
         activate_now_(pick);
     }

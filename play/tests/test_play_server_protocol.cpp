@@ -764,14 +764,6 @@ struct SeatClient {
 
 }  // namespace
 
-namespace {
-/// A rune being picked for a cost. The engine does not notice a concession
-/// there (GameEngine::askRunesFor asks again), so no test ends its game in one.
-bool isRunePayment(const json& f) {
-    return f["prompt"]["kind"].get<std::string>().rfind("rune for", 0) == 0;
-}
-}  // namespace
-
 TEST(PlayServerSeats, EachSeatGetsItsOwnPrivateLinesAndASpectatorNeither) {
     SeatedGame game;
     SeatClient p1, p2, watcher;
@@ -949,7 +941,7 @@ TEST(PlayServerSeats, APromptNamesAHiddenAskingCardOnlyToItsOwner) {
             const uint64_t id = f["decision_id"].get<uint64_t>();
             if (id == who->answered) continue;
             const json& theirs = (who == &p1 ? p2 : p1).last_frame;
-            if (found && !isRunePayment(f)) { done = true; break; }
+            if (found) { done = true; break; }
             if (!found && inHand(f) && theirs["decision_id"] == id &&
                 watcher.last_frame["decision_id"] == id && theirs["type"] == "decision") {
                 found = true;
@@ -1126,8 +1118,7 @@ TEST(PlayServerProtocol, EveryDecisionCarriesItsOwnPrompt) {
         // Every frame of the decision says the same (a reconnect, a re-render).
         c.send({{"type", "request_state"}});
         EXPECT_EQ(c.nextDecision("P1")["prompt"], p);
-        // Not in the middle of a payment: the game is about to be conceded.
-        if (kinds.size() >= 5 && with_source > 0 && with_question > 0 && !isRunePayment(f)) break;
+        if (kinds.size() >= 5 && with_source > 0 && with_question > 0) break;
         // The last option: a play rather than a pass.
         c.send({{"type", "choose"}, {"player", "P1"},
                 {"index", static_cast<int>(f["legal"].size()) - 1}, {"decision_id", last}});
@@ -1169,8 +1160,8 @@ TEST(PlayServerProtocol, SpectatorFramesCarryTheHeldDecisionsPrompt) {
         Client c;
         EXPECT_TRUE(c.connect(server.port()));
         uint64_t last = 0;
-        bool turn_ended = false;
-        for (int i = 0; i < 400 && !::testing::Test::HasFailure(); ++i) {
+        int seen = 0;
+        while (seen < 60 && !::testing::Test::HasFailure()) {
             json f = c.readUntil([&](const json& m) {
                 return m["type"] == "decision" && m["decision_id"].get<uint64_t>() > last;
             });
@@ -1180,14 +1171,10 @@ TEST(PlayServerProtocol, SpectatorFramesCarryTheHeldDecisionsPrompt) {
             EXPECT_NE(p["kind"], "unspecified") << "decision " << last;
             EXPECT_EQ(p["decider"], f["player"]);
             EXPECT_EQ(p["options"].size(), f["legal"].size());
-            // Stop before a decision that is not a rune payment (see above).
-            const int chosen = f["spectator"]["chosen"].get<int>();
-            turn_ended = chosen >= 0 && f["legal"][static_cast<size_t>(chosen)]["type"]
-                                            .get<std::string>().find("EndTurn") != std::string::npos;
-            if (i >= 30 && turn_ended) break;
+            ++seen;
             c.send({{"type", "spectator_step"}});
         }
-        EXPECT_TRUE(turn_ended);
+        EXPECT_EQ(seen, 60);
     }
     server.requestShutdown();
     game_thread.join();

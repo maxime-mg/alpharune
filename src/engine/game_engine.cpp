@@ -9822,7 +9822,7 @@ GameEngine::CostPaymentAdvance GameEngine::resolveCostPaymentDecision(
     if (cur.phase == Phase::PayingEnergy) {
         RIFT_TRACE(events_, "  EXHAUST_RUNE: " + rune.name + " (id=" +
                          toString(rune_id) +
-                         ") for energy [agent choice]");
+                         ") for energy" + (state_.game_over ? "" : " [agent choice]"));
         rune.is_exhausted = true;
         events_.emit(ObjectStateChangedEvent{rune_id, "exhausted"});
         cur.energy_remaining--;
@@ -9830,7 +9830,7 @@ GameEngine::CostPaymentAdvance GameEngine::resolveCostPaymentDecision(
         RIFT_TRACE(events_, "  RECYCLE_RUNE: " + rune.name + " (id=" +
                          toString(rune_id) + ", " +
                          (rune.is_exhausted ? "exhausted" : "ready") +
-                         ") for power [agent choice]");
+                         ") for power" + (state_.game_over ? "" : " [agent choice]"));
         auto base_loc = BaseLocation{cur.player};
         // Snapshot, move, announce, then the new object (CR 124.1) — the
         // order of every other way off the board.
@@ -9991,7 +9991,10 @@ bool GameEngine::payCardCost(PlayerId player, GameObjectId card_obj,
 
 void GameEngine::askRunesFor(PlayerId player, GameObjectId card_obj, CostPaymentAdvance adv) {
     while (adv.kind == CostPaymentAdvance::Kind::NeedDecision) {
-        if (events_.quiet()) {   // a probe: the engine's order, nobody asked
+        // A probe, or a game that is over (a concession: at one of these
+        // prompts, or at one before them): the engine's order, nobody asked.
+        // The payment is still made, so the callers find the cost paid.
+        if (events_.quiet() || state_.game_over) {
             adv = resolveCostPaymentDecision(adv.legal.front());
             continue;
         }
@@ -10012,6 +10015,7 @@ void GameEngine::askRunesFor(PlayerId player, GameObjectId card_obj, CostPayment
             enginePrompt(player, for_energy ? PromptKind::RuneForEnergy : PromptKind::RuneForPower,
                          card_obj));
         if (on_decision) on_decision(state_, adv.legal, chosen);
+        if (state_.game_over) continue;   // a concession names no rune
         adv = resolveCostPaymentDecision(chosen);
     }
 }

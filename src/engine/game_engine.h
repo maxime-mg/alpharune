@@ -669,7 +669,9 @@ private:
     bool payLikeACardCost(PlayerId player, GameObjectId card_obj, int energy, int power,
                           const std::vector<Domain>& domains);
     /// The rune decisions of a payment cursor, each asked of the payer (one
-    /// call site for every card-cost payment: PromptCensus).
+    /// call site for every card-cost payment: PromptCensus). Once the game is
+    /// over (the payer conceded) nobody is asked: the rest is paid in the
+    /// engine's order.
     void askRunesFor(PlayerId player, GameObjectId card_obj, CostPaymentAdvance adv);
     CostPaymentAdvance beginCostPayment(PlayerId player, GameObjectId card_obj,
                                         const Card::PlayCostAdjust& adj = {});
