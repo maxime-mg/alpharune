@@ -550,6 +550,67 @@
     $("turn-summary").textContent = `Turn ${t.number} · ${t.phase} · ${PLAYER_LABEL[t.turn_player] || ""}`;
   }
 
+  // ── What is being asked (frame.prompt, docs/play-api.md) ──
+  const capital = (s) => (s ? s[0].toUpperCase() + s.slice(1) : "");
+
+  // The engine numbers battlefields; the board names them.
+  function withBattlefieldNames(text) {
+    return text.replace(/\(battlefield \d+\)/g, "").replace(/\bbattlefield (\d+)/g, (whole, n) => {
+      const bf = (board().battlefields || []).find((x) => x.id === Number(n));
+      return bf ? bf.name : whole;
+    }).trim();
+  }
+
+  // "Target: Falling Star", without the words that are only the decider's.
+  function promptHeading(p) {
+    if (!p || p.kind === "unspecified") return "";
+    return capital(p.kind) + (p.source_card ? `: ${p.source_card.name}` : "");
+  }
+
+  // The asking code's words, without the kind it puts in front ("may: ",
+  // "target A: ") and without a question that is only the card's name: the
+  // heading says both.
+  function promptQuestion(p) {
+    const q = (p.question || "").replace(/^(may|mode|pick|target|target [AB]): /, "");
+    return p.source_card && q === p.source_card.name ? "" : capital(q);
+  }
+
+  // The legal actions in the order the prompt lists them, each with its
+  // option. Never by list index: that order can follow object ids.
+  function decisionOptions() {
+    const legal = frame.legal || [];
+    const options = frame.prompt && frame.prompt.options;
+    if (!options || options.length !== legal.length) return legal.map((action) => ({ action, option: null }));
+    const byIndex = new Map(legal.map((a) => [a.index, a]));
+    return options.map((option) => ({ action: byIndex.get(option.index), option }));
+  }
+
+  function optionLabel(action, option) {
+    if (!option || option.role === "Action" || !option.text) return action.label;
+    // "Yes — <the question again>": the question is above the buttons.
+    if (option.role === "Yes" || option.role === "No")
+      return capital(option.text.replace(/^(Yes|No) — .*$/s, "$1"));
+    return capital(withBattlefieldNames(option.text));
+  }
+
+  function renderPrompt() {
+    const box = $("prompt");
+    const p = frame.prompt;
+    const heading = promptHeading(p);
+    box.replaceChildren();
+    box.hidden = !heading;
+    if (!heading) return;
+    box.append(el("div", "prompt-heading", heading));
+    const question = promptQuestion(p);
+    if (question) box.append(el("div", "prompt-question", question));
+    const source = p.source_card && objIndex.get(p.source_card.id);
+    if (source) {
+      attachTooltip(box.firstChild, source);
+      box.firstChild.addEventListener("mouseenter", () => setHighlight([source.id]));
+      box.firstChild.addEventListener("mouseleave", () => setHighlight([]));
+    }
+  }
+
   function renderDecision() {
     const legal = frame.legal || [];
     const actions = $("actions");
@@ -560,12 +621,12 @@
     jump.hidden = !deciding;
     jump.textContent = `Your move (${legal.length}) ↓`;
     $("decision-title").textContent = deciding ? `Your decision (${PLAYER_LABEL[frame.player] || frame.player})` : "Actions";
-    if (placing) {
+    if (!placing) renderPrompt();
+    else {
       prompt.hidden = false;
       prompt.textContent = `Where should ${placing.name} go? Click a highlighted base or battlefield, ` +
         `or a button below. Esc or clicking the card again cancels.`;
-    } else if (frame.prompt) { prompt.hidden = false; prompt.textContent = frame.prompt; }
-    else prompt.hidden = true;
+    }
 
     if (!deciding) {
       let msg;
@@ -575,12 +636,16 @@
       actions.append(el("div", "waiting", msg));
       return;
     }
-    for (const a of legal) {
+    for (const { action: a, option } of decisionOptions()) {
       const btn = el("button", "action");
       btn.dataset.index = a.index;
       const type = String(a.type || "").replace(/^P\d:\s*/, "").trim();
-      if (/^(Pass|EndTurn|Done|Finish)/.test(type)) btn.classList.add("end");
-      btn.append(el("span", "type", type), document.createTextNode(a.label));
+      const role = option ? option.role : "Action";
+      if (/^(Pass|EndTurn|Done|Finish)/.test(type) || role === "No") btn.classList.add("end");
+      if (role === "Yes") btn.classList.add("yes");
+      // "MakeChoice" says nothing next to an option that has words of its own.
+      if (role === "Action") btn.append(el("span", "type", type));
+      btn.append(document.createTextNode(optionLabel(a, option)));
       const ids = actionIds(a);
       btn.addEventListener("mouseenter", () => setHighlight(ids));
       btn.addEventListener("mouseleave", () => setHighlight([]));

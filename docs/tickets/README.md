@@ -10,54 +10,53 @@ Source documents: [ui-roadmap.md](../ui-roadmap.md) and [card-status](../card-st
 
 ## Working order
 
-40 tickets open.
+39 tickets open.
 
 | # | Ticket | Priority | Area | Status | Depends on |
 |---|---|---|---|---|---|
-| 1 | [PLAY-006](PLAY-006-send-structured-prompts-to-the-client.md): Send structured prompts to the client | P1 | Phase 0 | todo | ENG-001, PLAY-003 |
-| 2 | [PLAY-007](PLAY-007-describe-what-each-legal-action-does.md): Describe what each legal action does | P1 | Phase 0 | todo | PLAY-003 |
-| 3 | [PLAY-008](PLAY-008-event-stream-for-animation-and-a-readable-log.md): Event stream for animation and a readable log | P1 | Phase 0 | todo | PLAY-002 |
-| 4 | [PLAY-009](PLAY-009-golden-frame-and-gesture-round-trip-tests.md): Golden-frame and gesture round-trip tests | P1 | Phase 0 | todo | PLAY-003, PLAY-007 |
-| 5 | [PLAY-020](PLAY-020-animate-draws-channels-and-discards.md): Animate draws, channels and discards | P1 | Phase 2 | todo | PLAY-008, PLAY-010 |
-| 6 | [PLAY-021](PLAY-021-drag-a-card-from-hand-to-play-it.md): Drag a card from hand to play it | P1 | Phase 2 | todo | PLAY-007, PLAY-010 |
-| 7 | [PLAY-022](PLAY-022-chooser-when-one-drop-matches-several-actions.md): Chooser when one drop matches several actions | P1 | Phase 2 | todo | PLAY-021 |
-| 8 | [PLAY-023](PLAY-023-pay-costs-by-clicking-runes.md): Pay costs by clicking runes | P1 | Phase 2 | todo | PLAY-003, PLAY-006, PLAY-021 |
-| 9 | [PLAY-030](PLAY-030-drag-a-unit-to-move-it.md): Drag a unit to move it | P1 | Phase 3 | todo | PLAY-007, PLAY-010 |
-| 10 | [PLAY-040](PLAY-040-chain-panel-with-target-arrows.md): Chain panel with target arrows | P1 | Phase 4 | todo | PLAY-003, PLAY-012 |
-| 11 | [PLAY-041](PLAY-041-targeting-on-the-board.md): Targeting on the board | P1 | Phase 4 | todo | PLAY-006, PLAY-007 |
-| 12 | [PLAY-042](PLAY-042-reactions-and-accept.md): Reactions and Accept | P1 | Phase 4 | todo | PLAY-004, PLAY-040 |
-| 13 | [PLAY-050](PLAY-050-showdown-focus-and-pass.md): Showdown focus and Pass | P1 | Phase 5 | todo | PLAY-004, PLAY-040 |
-| 14 | [PLAY-051](PLAY-051-combat-view-and-damage-preview.md): Combat view and damage preview | P1 | Phase 5 | todo | PLAY-006, PLAY-011 |
-| 15 | [PLAY-053](PLAY-053-setup-and-mulligan-screens.md): Setup and mulligan screens | P1 | Phase 5 | todo | PLAY-006 |
-| 16 | [RAD-000](RAD-000-refresh-radiance-card-data-and-scaffold-the-classes.md): Refresh Radiance card data and scaffold the classes | P1 | Cards | todo |  |
-| 17 | [PLAY-013](PLAY-013-board-parity-test-against-the-text-view.md): Board parity test against the text view | P2 | Phase 1 | todo | PLAY-011, PLAY-009 |
-| 18 | [PLAY-024](PLAY-024-optional-costs-accelerate-additional-costs-repeat.md): Optional costs: Accelerate, additional costs, Repeat | P2 | Phase 2 | todo | PLAY-006, PLAY-021 |
-| 19 | [PLAY-031](PLAY-031-move-several-units-together.md): Move several units together | P2 | Phase 3 | todo | PLAY-030, PLAY-006, ENG-002 |
-| 20 | [PLAY-043](PLAY-043-activated-abilities-menu.md): Activated abilities menu | P2 | Phase 4 | todo | PLAY-007 |
-| 21 | [PLAY-044](PLAY-044-triggers-modes-x-values-and-card-name-pickers.md): Triggers, modes, X values and card-name pickers | P2 | Phase 4 | todo | PLAY-006 |
-| 22 | [PLAY-045](PLAY-045-face-down-cards.md): Face-down cards | P2 | Phase 4 | todo | PLAY-002, PLAY-021 |
-| 23 | [PLAY-052](PLAY-052-score-control-and-conquer-animations.md): Score, control and conquer animations | P2 | Phase 5 | todo | PLAY-008 |
-| 24 | [PLAY-054](PLAY-054-game-over-screen-and-log-export.md): Game over screen and log export | P2 | Phase 5 | todo | PLAY-008 |
-| 25 | [PLAY-061](PLAY-061-click-to-select-fallback-and-keyboard-shortcuts.md): Click-to-select fallback and keyboard shortcuts | P2 | Cross-cutting | todo | PLAY-021, PLAY-030 |
-| 26 | [RAD-001](RAD-001-radiance-deploy-gear-and-bomb-tokens.md): Radiance: Deploy gear and Bomb tokens | P2 | Cards | todo | RAD-000 |
-| 27 | [RAD-002](RAD-002-radiance-disarm.md): Radiance: Disarm | P2 | Cards | todo | RAD-000 |
-| 28 | [RAD-003](RAD-003-radiance-show-off.md): Radiance: Show Off | P2 | Cards | todo | RAD-000 |
-| 29 | [RAD-004](RAD-004-radiance-recruit-and-mech-tokens.md): Radiance: Recruit and Mech tokens | P2 | Cards | todo | RAD-000 |
-| 30 | [RAD-005](RAD-005-radiance-legends.md): Radiance: legends | P2 | Cards | todo | RAD-000 |
-| 31 | [RAD-006](RAD-006-radiance-battlefields.md): Radiance: battlefields | P2 | Cards | todo | RAD-000 |
-| 32 | [PLAY-060](PLAY-060-hot-seat-privacy-screen.md): Hot-seat privacy screen | P3 | Cross-cutting | todo | PLAY-002 |
-| 33 | [PLAY-062](PLAY-062-ship-the-web-files-inside-the-binary.md): Ship the web files inside the binary | P3 | Cross-cutting | todo | PLAY-001 |
-| 34 | [RAD-007](RAD-007-radiance-fury-cards.md): Radiance: Fury cards | P3 | Cards | todo | RAD-000, RAD-004 |
-| 35 | [RAD-008](RAD-008-radiance-calm-cards.md): Radiance: Calm cards | P3 | Cards | todo | RAD-000, RAD-004 |
-| 36 | [RAD-009](RAD-009-radiance-mind-cards.md): Radiance: Mind cards | P3 | Cards | todo | RAD-000, RAD-004 |
-| 37 | [RAD-010](RAD-010-radiance-body-cards.md): Radiance: Body cards | P3 | Cards | todo | RAD-000, RAD-004 |
-| 38 | [RAD-011](RAD-011-radiance-chaos-cards.md): Radiance: Chaos cards | P3 | Cards | todo | RAD-000, RAD-004 |
-| 39 | [RAD-012](RAD-012-radiance-order-cards.md): Radiance: Order cards | P3 | Cards | todo | RAD-000, RAD-004 |
-| 40 | [RAD-013](RAD-013-radiance-cards-with-no-domain-in-the-pre-release-data.md): Radiance: cards with no domain in the pre-release data | P3 | Cards | todo | RAD-000 |
+| 1 | [PLAY-007](PLAY-007-describe-what-each-legal-action-does.md): Describe what each legal action does | P1 | Phase 0 | todo | PLAY-003 |
+| 2 | [PLAY-008](PLAY-008-event-stream-for-animation-and-a-readable-log.md): Event stream for animation and a readable log | P1 | Phase 0 | todo | PLAY-002 |
+| 3 | [PLAY-009](PLAY-009-golden-frame-and-gesture-round-trip-tests.md): Golden-frame and gesture round-trip tests | P1 | Phase 0 | todo | PLAY-003, PLAY-007 |
+| 4 | [PLAY-020](PLAY-020-animate-draws-channels-and-discards.md): Animate draws, channels and discards | P1 | Phase 2 | todo | PLAY-008, PLAY-010 |
+| 5 | [PLAY-021](PLAY-021-drag-a-card-from-hand-to-play-it.md): Drag a card from hand to play it | P1 | Phase 2 | todo | PLAY-007, PLAY-010 |
+| 6 | [PLAY-022](PLAY-022-chooser-when-one-drop-matches-several-actions.md): Chooser when one drop matches several actions | P1 | Phase 2 | todo | PLAY-021 |
+| 7 | [PLAY-023](PLAY-023-pay-costs-by-clicking-runes.md): Pay costs by clicking runes | P1 | Phase 2 | todo | PLAY-003, PLAY-006, PLAY-021 |
+| 8 | [PLAY-030](PLAY-030-drag-a-unit-to-move-it.md): Drag a unit to move it | P1 | Phase 3 | todo | PLAY-007, PLAY-010 |
+| 9 | [PLAY-040](PLAY-040-chain-panel-with-target-arrows.md): Chain panel with target arrows | P1 | Phase 4 | todo | PLAY-003, PLAY-012 |
+| 10 | [PLAY-041](PLAY-041-targeting-on-the-board.md): Targeting on the board | P1 | Phase 4 | todo | PLAY-006, PLAY-007 |
+| 11 | [PLAY-042](PLAY-042-reactions-and-accept.md): Reactions and Accept | P1 | Phase 4 | todo | PLAY-004, PLAY-040 |
+| 12 | [PLAY-050](PLAY-050-showdown-focus-and-pass.md): Showdown focus and Pass | P1 | Phase 5 | todo | PLAY-004, PLAY-040 |
+| 13 | [PLAY-051](PLAY-051-combat-view-and-damage-preview.md): Combat view and damage preview | P1 | Phase 5 | todo | PLAY-006, PLAY-011 |
+| 14 | [PLAY-053](PLAY-053-setup-and-mulligan-screens.md): Setup and mulligan screens | P1 | Phase 5 | todo | PLAY-006 |
+| 15 | [RAD-000](RAD-000-refresh-radiance-card-data-and-scaffold-the-classes.md): Refresh Radiance card data and scaffold the classes | P1 | Cards | todo |  |
+| 16 | [PLAY-013](PLAY-013-board-parity-test-against-the-text-view.md): Board parity test against the text view | P2 | Phase 1 | todo | PLAY-011, PLAY-009 |
+| 17 | [PLAY-024](PLAY-024-optional-costs-accelerate-additional-costs-repeat.md): Optional costs: Accelerate, additional costs, Repeat | P2 | Phase 2 | todo | PLAY-006, PLAY-021 |
+| 18 | [PLAY-031](PLAY-031-move-several-units-together.md): Move several units together | P2 | Phase 3 | todo | PLAY-030, PLAY-006, ENG-002 |
+| 19 | [PLAY-043](PLAY-043-activated-abilities-menu.md): Activated abilities menu | P2 | Phase 4 | todo | PLAY-007 |
+| 20 | [PLAY-044](PLAY-044-triggers-modes-x-values-and-card-name-pickers.md): Triggers, modes, X values and card-name pickers | P2 | Phase 4 | todo | PLAY-006 |
+| 21 | [PLAY-045](PLAY-045-face-down-cards.md): Face-down cards | P2 | Phase 4 | todo | PLAY-002, PLAY-021 |
+| 22 | [PLAY-052](PLAY-052-score-control-and-conquer-animations.md): Score, control and conquer animations | P2 | Phase 5 | todo | PLAY-008 |
+| 23 | [PLAY-054](PLAY-054-game-over-screen-and-log-export.md): Game over screen and log export | P2 | Phase 5 | todo | PLAY-008 |
+| 24 | [PLAY-061](PLAY-061-click-to-select-fallback-and-keyboard-shortcuts.md): Click-to-select fallback and keyboard shortcuts | P2 | Cross-cutting | todo | PLAY-021, PLAY-030 |
+| 25 | [RAD-001](RAD-001-radiance-deploy-gear-and-bomb-tokens.md): Radiance: Deploy gear and Bomb tokens | P2 | Cards | todo | RAD-000 |
+| 26 | [RAD-002](RAD-002-radiance-disarm.md): Radiance: Disarm | P2 | Cards | todo | RAD-000 |
+| 27 | [RAD-003](RAD-003-radiance-show-off.md): Radiance: Show Off | P2 | Cards | todo | RAD-000 |
+| 28 | [RAD-004](RAD-004-radiance-recruit-and-mech-tokens.md): Radiance: Recruit and Mech tokens | P2 | Cards | todo | RAD-000 |
+| 29 | [RAD-005](RAD-005-radiance-legends.md): Radiance: legends | P2 | Cards | todo | RAD-000 |
+| 30 | [RAD-006](RAD-006-radiance-battlefields.md): Radiance: battlefields | P2 | Cards | todo | RAD-000 |
+| 31 | [PLAY-060](PLAY-060-hot-seat-privacy-screen.md): Hot-seat privacy screen | P3 | Cross-cutting | todo | PLAY-002 |
+| 32 | [PLAY-062](PLAY-062-ship-the-web-files-inside-the-binary.md): Ship the web files inside the binary | P3 | Cross-cutting | todo | PLAY-001 |
+| 33 | [RAD-007](RAD-007-radiance-fury-cards.md): Radiance: Fury cards | P3 | Cards | todo | RAD-000, RAD-004 |
+| 34 | [RAD-008](RAD-008-radiance-calm-cards.md): Radiance: Calm cards | P3 | Cards | todo | RAD-000, RAD-004 |
+| 35 | [RAD-009](RAD-009-radiance-mind-cards.md): Radiance: Mind cards | P3 | Cards | todo | RAD-000, RAD-004 |
+| 36 | [RAD-010](RAD-010-radiance-body-cards.md): Radiance: Body cards | P3 | Cards | todo | RAD-000, RAD-004 |
+| 37 | [RAD-011](RAD-011-radiance-chaos-cards.md): Radiance: Chaos cards | P3 | Cards | todo | RAD-000, RAD-004 |
+| 38 | [RAD-012](RAD-012-radiance-order-cards.md): Radiance: Order cards | P3 | Cards | todo | RAD-000, RAD-004 |
+| 39 | [RAD-013](RAD-013-radiance-cards-with-no-domain-in-the-pre-release-data.md): Radiance: cards with no domain in the pre-release data | P3 | Cards | todo | RAD-000 |
 
 ## Done
 
-23 tickets.
+24 tickets.
 
 | # | Ticket | Priority | Area | Status | Depends on |
 |---|---|---|---|---|---|
@@ -80,6 +79,7 @@ Source documents: [ui-roadmap.md](../ui-roadmap.md) and [card-status](../card-st
 | — | [CARD-006](CARD-006-this-turn-effects-and-turn-scoped-tracking.md): "This turn" effects and turn-scoped tracking | P1 | Cards | done |  |
 | — | [CARD-007](CARD-007-missing-trigger-events.md): Missing trigger events | P1 | Cards | done |  |
 | — | [CARD-013](CARD-013-gaps-left-after-upstreams-card-fixes.md): Gaps left after upstream's card fixes | P1 | Cards | done |  |
+| — | [PLAY-006](PLAY-006-send-structured-prompts-to-the-client.md): Send structured prompts to the client | P1 | Phase 0 | done | ENG-001, PLAY-003 |
 | — | [CARD-009](CARD-009-hidden-cards.md): Hidden cards | P2 | Cards | done |  |
 | — | [CARD-010](CARD-010-replacement-effects.md): Replacement effects | P2 | Cards | done |  |
 | — | [CARD-011](CARD-011-equipment.md): Equipment | P2 | Cards | done |  |

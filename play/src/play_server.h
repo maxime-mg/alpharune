@@ -197,10 +197,11 @@ public:
     /// last click.
     void publishEngineState();
 
-    /// Call on the engine thread after every agent decision (from the
-    /// engine's `on_decision`). A `*_PROMPT` line belongs to the decision
-    /// it preceded; this retires it so it cannot head a later one.
-    void notifyDecisionMade();
+    /// Call on the engine thread as an AI seat is asked (ServedAiSeat does):
+    /// what the decision `awaitSpectatorStep` reports next is about. The
+    /// engine's own `pendingPrompt()` is gone by then. No-op unless
+    /// `PlayServerConfig::spectator` is set.
+    void noteAsked(const std::vector<Intent>& legal, const Prompt& prompt);
 
     /// Call once the engine thread has finished the game: from then on
     /// GameState is stable. Sends the terminal frame.
@@ -255,11 +256,17 @@ public:
 
     Intent selectAction(const GameState& state,
                         const std::vector<Intent>& legal_actions) override {
+        return decide(state, legal_actions, Prompt{});
+    }
+
+    Intent decide(const GameState& state, const std::vector<Intent>& legal_actions,
+                  const Prompt& prompt) override {
         if (server_.shutdownRequested()) {
             return Intent::concede(decidingPlayer(state, legal_actions));
         }
+        server_.noteAsked(legal_actions, prompt);
         server_.publishEngineState();
-        return inner_.selectAction(state, legal_actions);
+        return inner_.decide(state, legal_actions, prompt);
     }
 
 private:

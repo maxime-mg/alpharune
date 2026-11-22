@@ -890,16 +890,14 @@ int main(int argc, char* argv[]) {
             std::cout << "  Spectator mode: the game is paused at each decision — "
                          "use Step / Play in the browser to advance.\n\n";
         }
-        // After every decision: retire the prompt that belonged to it, and
-        // in spectator mode hold the engine until the viewer steps (or
-        // autoplay advances) in the browser.
+        // After every decision: in spectator mode, hold the engine until the
+        // viewer steps (or autoplay advances) in the browser.
         engine.on_decision = [s = server.get(), prev = std::move(engine.on_decision)](
                                  const GameState& st,
                                  const std::vector<Intent>& actions,
                                  const Intent& chosen) {
             if (prev) prev(st, actions, chosen);
             s->awaitSpectatorStep(actions, chosen);
-            s->notifyDecisionMade();
         };
 
         if (!p1_human) {

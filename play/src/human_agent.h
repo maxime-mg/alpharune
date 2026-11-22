@@ -10,7 +10,8 @@
 /// human picked. The engine thread then wakes up and returns that
 /// action.
 ///
-/// Snapshot accessors (`pendingLegal`, `pendingPlayer`, `decisionId`)
+/// Snapshot accessors (`pendingLegal`, `pendingPrompt`, `pendingPlayer`,
+/// `decisionId`)
 /// let the UI layer poll for "is the engine waiting on a decision
 /// right now, and if so what are the options?" without taking any
 /// locks the engine thread holds.
@@ -34,6 +35,7 @@
 /// dropped instead of answering a later, different question.
 
 #include "agents/agent_interface.h"
+#include "core/prompt.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -67,6 +69,16 @@ public:
         const GameState& state,
         const std::vector<Intent>& legal_actions
     ) override {
+        return decide(state, legal_actions, Prompt{});
+    }
+
+    /// What the engine calls: as `selectAction`, with what is being asked,
+    /// kept as `pendingPrompt()` while the engine waits.
+    Intent decide(
+        const GameState& state,
+        const std::vector<Intent>& legal_actions,
+        const Prompt& prompt
+    ) override {
         const PlayerId decider = seat_ != PlayerId::None
             ? seat_ : decidingPlayer(state, legal_actions);
         if (legal_actions.empty() || aborted_.load(std::memory_order_acquire)) {
@@ -88,6 +100,7 @@ public:
             // belongs to that decision, not this one.
             pending_choice_.reset();
             paused_legal_  = legal_actions;
+            paused_prompt_ = prompt;
             paused_player_ = decider;
             decision_id_.fetch_add(1, std::memory_order_release);
             at_decision_   = true;
@@ -184,6 +197,15 @@ public:
         return paused_legal_;
     }
 
+    /// UI-side snapshot: what is being asked at the current pause point
+    /// (PromptKind::Unspecified if the caller did not say). It holds object
+    /// ids: what a player may be shown of it is `describePrompt`
+    /// (engine/prompt_description.h).
+    Prompt pendingPrompt() const {
+        std::lock_guard<std::mutex> lock(mu_);
+        return paused_prompt_;
+    }
+
     /// UI-side snapshot: player to act at the current pause point.
     PlayerId pendingPlayer() const {
         std::lock_guard<std::mutex> lock(mu_);
@@ -216,6 +238,7 @@ private:
     mutable std::condition_variable cv_ui_; // UI threads wait here
 
     std::vector<Intent>     paused_legal_;
+    Prompt                  paused_prompt_;
     PlayerId                paused_player_ = PlayerId::None;
     std::optional<int>      pending_choice_;
     bool                    at_decision_   = false;

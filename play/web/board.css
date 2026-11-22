@@ -150,10 +150,13 @@ button { font: inherit; }
 .turn-grid dd { margin: 0; }
 .gameover { margin-top: 8px; padding: 8px; border-radius: 8px; background: rgba(242, 193, 78, .12); color: var(--warn); font-weight: 600; }
 .prompt { margin-bottom: 8px; padding: 6px 8px; border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: 4px; }
+.prompt-heading { font-weight: 600; }
+.prompt-question { margin-top: 2px; color: var(--muted); }
 .actions { display: flex; flex-direction: column; gap: 4px; max-height: 360px; overflow: auto; }
 .action { text-align: left; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; }
 .action:hover, .action.highlight { border-color: var(--warn); }
 .action.end { border-color: rgba(106, 168, 255, .5); }
+.action.yes { border-color: rgba(120, 200, 140, .6); }
 .action .type { color: var(--muted); font-size: 11px; margin-right: 6px; }
 .waiting { color: var(--muted); }
 .chain { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }

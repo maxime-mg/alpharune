@@ -484,14 +484,12 @@ const CARD_IMAGES = /*__RIFTBOUND_CARD_IMAGES__*/;
 
     const aDiv = $('actions');
     aDiv.innerHTML = '';
-    // Prompt header for MakeChoice / multi-choice decisions. The server
-    // attaches the latest *_PROMPT trace line as `m.prompt`; if present,
-    // surface it above the legal-action buttons so the user knows what
-    // they're choosing (e.g. "Discard a card", "Choose a target").
-    if (m.prompt) {
+    // What is being asked (`m.prompt`, docs/play-api.md), above the
+    // legal-action buttons, so the user knows what they're choosing.
+    if (m.prompt && m.prompt.text) {
       const ph = document.createElement('div');
       ph.className = 'prompt-header';
-      ph.textContent = m.prompt;
+      ph.textContent = m.prompt.text;
       aDiv.appendChild(ph);
     }
     const legal = m.legal || [];

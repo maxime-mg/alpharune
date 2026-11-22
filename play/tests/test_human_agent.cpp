@@ -230,3 +230,36 @@ TEST(HumanAgent, WaitForDecisionTimesOutBeforeEngineArrives) {
     // No engine thread → wait returns false on timeout.
     EXPECT_FALSE(agent.waitForDecision(50ms));
 }
+
+// The engine asks through `decide`: the prompt is there while it waits, and a
+// replaced list (a god-mode edit) is still the same question.
+TEST(HumanAgent, DecideKeepsThePromptWhileTheEngineWaits) {
+    HumanAgent agent{PlayerId::Player1};
+    auto state = makeState(PlayerId::Player1);
+    auto legal = makeLegal(PlayerId::Player1, 3);
+    Prompt prompt;
+    prompt.kind = PromptKind::Mode;
+    prompt.question = "which one?";
+
+    std::thread engine([&] {
+        EXPECT_EQ(agent.decide(state, legal, prompt).chosen_value, 1);
+        agent.selectAction(state, legal);
+    });
+    EXPECT_TRUE(agent.waitForDecision(5s));
+    EXPECT_EQ(agent.pendingPrompt().kind, PromptKind::Mode);
+    EXPECT_EQ(agent.pendingPrompt().question, "which one?");
+    EXPECT_TRUE(agent.replacePendingLegal(makeLegal(PlayerId::Player1, 2)));
+    EXPECT_EQ(agent.pendingPrompt().kind, PromptKind::Mode);
+    const uint64_t first = agent.decisionId();
+    EXPECT_TRUE(agent.setChosenAction(1));
+
+    // Asked with no prompt: the last one is not shown again.
+    const auto deadline = std::chrono::steady_clock::now() + 5s;
+    while (agent.decisionId() == first && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(1ms);
+    EXPECT_TRUE(agent.waitForDecision(5s));
+    EXPECT_EQ(agent.pendingPrompt().kind, PromptKind::Unspecified);
+    EXPECT_TRUE(agent.pendingPrompt().question.empty());
+    agent.abort();
+    engine.join();
+}

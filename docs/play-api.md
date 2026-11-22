@@ -91,8 +91,8 @@ each client takes a seat with `{"type":"seat","player":"P1"}` (the
 board page sends it when its URL has `?seat=P1` or `?seat=P2`). The seat
 must be a human one that no other connected client holds; the reply is
 `{"type":"seat","ok":true|false,...}`. A client that takes no seat is a
-spectator. Each seat then gets its own frames (its own hand; options and
-prompt only while it is asked), and `your_seat` says which. A `choose`
+spectator. Each seat then gets its own frames (its own hand; the options
+and the prompt's question only while it is asked), and `your_seat` says which. A `choose`
 is accepted only from the client seated as the player it answers for.
 
 With one human seat, or `--hot-seat`, every client gets the same stream
@@ -107,7 +107,7 @@ Every WS frame is a single JSON object. The `type` field discriminates.
 ### `decision`
 
 Pushed whenever a `HumanAgent` (the seat tied to either Player1 or
-Player2) is parked in `selectAction` waiting for input.
+Player2) is parked on a decision waiting for input.
 
 ```json
 {
@@ -202,14 +202,42 @@ Player2) is parked in `selectAction` waiting for input.
   (see `state` below).
 * `winner` (`"P1"` / `"P2"` / `"none"`) and `game_over_reason` are
   present when `game_over` is true.
-* `prompt` (optional) — present for mid-resolution choices (discard,
-  modal "choose one", variable-X, target picks). It's the human-readable
-  question captured from the card's `*_PROMPT` trace line; the UI shows
-  it as a header above the option buttons. It is on every frame of the
-  decision it was asked for and on no other. For these `MakeChoice`
-  decisions, `legal[].label` carries a meaningful option name (`Yes`,
-  `No`, a mode label, an `X` value) rather than a bare index.
+* `prompt`: what is being asked, on every `decision` frame; see below.
 * `spectator` — present in spectator mode; see the example at the end.
+
+### `prompt` — what is being asked
+
+The engine's own description of the decision (`describePrompt`,
+`src/engine/prompt_description.h`) for whoever the frame is for. It comes
+from the `Prompt` the engine passes to `HumanAgent::decide`, never from log
+lines.
+
+```text
+prompt = {
+  kind: "target",                 // toString(PromptKind): "main phase action", "may", "mode",
+                                  // "rune for energy", "combat damage", "mulligan", ...
+  decider: "P1" | "P2",
+  source_card: {id, name, def_id?} | null,   // the asking object, if this viewer may see what it is
+  text: "You decide (target) for your Frigid Touch in hand, its spell: choose a target ...",
+  question: "choose a target for Frigid Touch",      // the asking code's words, may be ""
+  options: [{index, role, text}]
+}
+```
+
+* Only the player deciding gets `question` and `options`. The other seat
+  gets `kind`, `decider`, `source_card` and a `text` without the question; a
+  spectator of a seat-bound game gets no `text`. `source_card` is null for
+  them while the asking card is in a hand or face down. A client that is not
+  told seats apart (one human, hot seat, god mode) gets the decider's view.
+* `options` has each entry of `legal` once. `index` is the entry's
+  `legal[].index`, which is what `choose` takes. **Show the options in this
+  order**: it follows what the player sees, while the order of `legal` can
+  follow object ids.
+* `role` is `Yes`, `No` (also "None" / "Keep it" / "No more ..."), `Value` (a
+  mode, an X, a place), `Object`, `NamedCard`, `ChainItem` or `Action` (a play,
+  move, activation, pass, mulligan or damage assignment). For `Action` the
+  `legal[].label` is the better text.
+* In spectator mode it is the prompt of the decision held at the gate.
 
 ### `board` — the per-seat board view
 
@@ -476,7 +504,7 @@ The binary runs three concurrent threads:
 
 | Thread       | Responsibility                                                    |
 |--------------|-------------------------------------------------------------------|
-| Game thread  | Drives `GameEngine::runGame`. Blocks at each decision inside the parked `HumanAgent::selectAction` (or, spectating, in `PlayServer::awaitSpectatorStep`). |
+| Game thread  | Drives `GameEngine::runGame`. Blocks at each decision inside the parked `HumanAgent::decide` (or, spectating, in `PlayServer::awaitSpectatorStep`). |
 | IO thread    | `asio::io_context::run` — handles HTTP accept + WS read/write.    |
 | Watcher      | Polls for a human seat reaching a new decision and broadcasts its `decision` frame. |
 

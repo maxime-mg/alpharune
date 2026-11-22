@@ -18,6 +18,7 @@
 #include "agents/random_agent.h"
 #include "cards/card_registry.h"
 #include "engine/batch_runner.h"
+#include "engine/prompt_description.h"
 #include "rules/deck_validator.h"
 
 #include <gtest/gtest.h>
@@ -37,6 +38,7 @@
 #include <fstream>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <thread>
 
@@ -245,7 +247,6 @@ struct LiveGame {
         engine.on_decision = [this](const GameState&, const std::vector<Intent>& legal,
                                     const Intent& chosen) {
             server->awaitSpectatorStep(legal, chosen);
-            server->notifyDecisionMade();
         };
         game_thread = std::thread([this] {
             AgentInterface& seat1 = spectating ? static_cast<AgentInterface&>(random1)
@@ -652,8 +653,6 @@ TEST(PlayServerProtocol, TerminalFrameIsDeliveredBeforeTheServerStops) {
     EXPECT_EQ(last.value("winner", ""), "P2");
 }
 
-// ─── 4.7 — a prompt heads the decision it was asked for, and only that one ───
-
 // ─── plans/09 9.PP2: seat-bound sessions ────────────────────────────────────
 // Two human seats, hidden information withheld, PlayServerConfig::seat_bound.
 // A client takes a seat or is a spectator; frames and log lines are per seat;
@@ -692,9 +691,6 @@ struct SeatedGame {
             server->broadcastLog(e.level == LogLevel::Trace ? "TRC" : "DBG", e.message,
                                  e.audience);
         });
-        engine.on_decision = [this](const GameState&, const std::vector<Intent>&, const Intent&) {
-            server->notifyDecisionMade();
-        };
         game_thread = std::thread([this] {
             engine.runGame(cards().deck1, cards().deck2, human1, human2, 20261010);
         });
@@ -766,6 +762,14 @@ struct SeatClient {
     }
 };
 
+}  // namespace
+
+namespace {
+/// A rune being picked for a cost. The engine does not notice a concession
+/// there (GameEngine::askRunesFor asks again), so no test ends its game in one.
+bool isRunePayment(const json& f) {
+    return f["prompt"]["kind"].get<std::string>().rfind("rune for", 0) == 0;
+}
 }  // namespace
 
 TEST(PlayServerSeats, EachSeatGetsItsOwnPrivateLinesAndASpectatorNeither) {
@@ -896,8 +900,18 @@ TEST(PlayServerSeats, FramesAreBuiltPerSeat) {
     EXPECT_FALSE(mine["legal"].empty());
     EXPECT_TRUE(theirs["legal"].empty());
     EXPECT_TRUE(fw["legal"].empty());
-    EXPECT_FALSE(theirs.contains("prompt"));
-    EXPECT_FALSE(fw.contains("prompt"));
+    // Everyone is told what kind of decision it is; only the seat asked gets
+    // the question and the options.
+    EXPECT_TRUE(mine["prompt"].contains("question"));
+    EXPECT_EQ(mine["prompt"]["options"].size(), mine["legal"].size());
+    for (const json* f : {&theirs, &fw}) {
+        const json& p = (*f)["prompt"];
+        EXPECT_EQ(p["kind"], mine["prompt"]["kind"]);
+        EXPECT_EQ(p["decider"], asked);
+        EXPECT_FALSE(p.contains("question"));
+        EXPECT_FALSE(p.contains("options"));
+    }
+    EXPECT_FALSE(fw["prompt"].contains("text"));
     // The text board follows the same rule.
     auto hiddenHands = [](const json& f) {
         const std::string board = f["render_text"].get<std::string>();
@@ -906,6 +920,53 @@ TEST(PlayServerSeats, FramesAreBuiltPerSeat) {
     EXPECT_EQ(hiddenHands(f1), 1);
     EXPECT_EQ(hiddenHands(f2), 1);
     EXPECT_EQ(hiddenHands(fw), 2);
+}
+
+TEST(PlayServerSeats, APromptNamesAHiddenAskingCardOnlyToItsOwner) {
+    SeatedGame game;
+    SeatClient p1, p2, watcher;
+    ASSERT_TRUE(p1.join(game.port(), "P1")["ok"].get<bool>());
+    ASSERT_TRUE(p2.join(game.port(), "P2")["ok"].get<bool>());
+    watcher.join(game.port(), "");
+
+    // Play (the last option: plays rather than passes) until a decision is
+    // about a card in the decider's hand — a rune paid for a card being played.
+    // (The card has left the hand's list by then; the prompt says where it is.)
+    auto inHand = [](const json& f) {
+        const json& p = f["prompt"];
+        return p.contains("options") && !p["source_card"].is_null() &&
+               p["text"].get<std::string>().find(" in hand") != std::string::npos;
+    };
+    bool found = false, done = false;
+    const auto deadline = std::chrono::steady_clock::now() + 30s;
+    while (!done && std::chrono::steady_clock::now() < deadline) {
+        for (int i = 0; i < 2; ++i) { p1.pump(false, 20ms); p2.pump(false, 20ms); watcher.pump(false, 20ms); }
+        for (SeatClient* who : {&p1, &p2}) {
+            const json& f = who->last_frame;
+            if (f.is_null() || f["type"] != "decision" || f["player"] != who->seat ||
+                f["legal"].empty())
+                continue;
+            const uint64_t id = f["decision_id"].get<uint64_t>();
+            if (id == who->answered) continue;
+            const json& theirs = (who == &p1 ? p2 : p1).last_frame;
+            if (found && !isRunePayment(f)) { done = true; break; }
+            if (!found && inHand(f) && theirs["decision_id"] == id &&
+                watcher.last_frame["decision_id"] == id && theirs["type"] == "decision") {
+                found = true;
+                EXPECT_EQ(theirs["prompt"]["kind"], f["prompt"]["kind"]);
+                EXPECT_TRUE(theirs["prompt"]["source_card"].is_null()) << theirs["prompt"].dump();
+                EXPECT_TRUE(watcher.last_frame["prompt"]["source_card"].is_null());
+                const std::string name = f["prompt"]["source_card"]["name"].get<std::string>();
+                EXPECT_EQ(theirs["prompt"]["text"].get<std::string>().find(name), std::string::npos)
+                    << theirs["prompt"].dump();
+            }
+            who->answered = id;
+            who->c.send({{"type", "choose"}, {"player", who->seat},
+                         {"index", static_cast<int>(f["legal"].size()) - 1},
+                         {"decision_id", id}});
+        }
+    }
+    EXPECT_TRUE(found) << "no decision about a card in a hand was reached";
 }
 
 TEST(PlayServerSeats, OnlyTheSeatBeingAskedMayAnswerAndASeatIsHeldByOneClient) {
@@ -1018,36 +1079,119 @@ TEST(PlayServerSeats, Pin_HotSeatSharesOneStream) {
     EXPECT_FALSE(fa.contains("your_seat"));
 }
 
-TEST(PlayServerProtocol, PromptStaysWithItsDecision) {
+TEST(PlayServerProtocol, EveryDecisionCarriesItsOwnPrompt) {
     LiveGame game;
     Client c;
     ASSERT_TRUE(c.connect(game.port()));
-    json d1 = c.nextDecision("P1");
-    ASSERT_FALSE(d1.is_null());
-    const uint64_t id1 = d1["decision_id"].get<uint64_t>();
-    EXPECT_FALSE(d1.contains("prompt"));
-
-    // The engine logs the prompt right before asking; here it is P1's.
-    game.server->broadcastLog("TRC", "MODE_PROMPT: Choose a mode [Draw | Burn]");
-    auto frame = [&] {
+    std::set<std::string> kinds;
+    int with_source = 0, with_question = 0;
+    uint64_t last = 0;
+    for (int n = 0; n < 400 && !::testing::Test::HasFailure(); ++n) {
+        const json f = c.nextDecision("P1", last);
+        ASSERT_FALSE(f.is_null());
+        ASSERT_TRUE(f.contains("prompt")) << f["decision_id"];
+        last = f["decision_id"].get<uint64_t>();
+        const json& p = f["prompt"];
+        const std::string kind = p["kind"].get<std::string>();
+        kinds.insert(kind);
+        EXPECT_NE(kind, "unspecified");
+        EXPECT_EQ(p["decider"], f["player"]);
+        EXPECT_EQ(p["text"].get<std::string>().rfind("You decide (" + kind + ")", 0), 0u);
+        if (!p["source_card"].is_null()) {
+            ++with_source;
+            EXPECT_FALSE(p["source_card"]["name"].get<std::string>().empty());
+        }
+        if (!p["question"].get<std::string>().empty()) ++with_question;
+        // The options are the legal actions, each once.
+        std::vector<int> indices;
+        for (const auto& o : p["options"]) {
+            indices.push_back(o["index"].get<int>());
+            EXPECT_FALSE(o["text"].get<std::string>().empty()) << kind;
+            static const std::set<std::string> kRoles{"Yes", "No", "Value", "Object",
+                                                      "NamedCard", "ChainItem", "Action"};
+            EXPECT_TRUE(kRoles.count(o["role"].get<std::string>())) << o["role"];
+        }
+        EXPECT_EQ(indices.size(), f["legal"].size()) << kind;
+        std::sort(indices.begin(), indices.end());
+        for (size_t i = 0; i < indices.size(); ++i) EXPECT_EQ(indices[i], static_cast<int>(i));
+        // In the order the engine describes them in, not the list's.
+        std::vector<int> described;
+        for (const auto& o : describePrompt(game.engine.state(), game.human.pendingPrompt(),
+                                            game.human.pendingLegal(), PlayerId::Player1,
+                                            cards().db).options)
+            described.push_back(static_cast<int>(o.index));
+        std::vector<int> sent;
+        for (const auto& o : p["options"]) sent.push_back(o["index"].get<int>());
+        EXPECT_EQ(sent, described) << kind;
+        // Every frame of the decision says the same (a reconnect, a re-render).
         c.send({{"type", "request_state"}});
-        return c.nextDecision("P1");
-    };
-    EXPECT_EQ(frame().value("prompt", ""), "Choose a mode");
-    // Every frame of that decision carries it (a reconnect, a re-render)…
-    EXPECT_EQ(frame().value("prompt", ""), "Choose a mode");
+        EXPECT_EQ(c.nextDecision("P1")["prompt"], p);
+        // Not in the middle of a payment: the game is about to be conceded.
+        if (kinds.size() >= 5 && with_source > 0 && with_question > 0 && !isRunePayment(f)) break;
+        // The last option: a play rather than a pass.
+        c.send({{"type", "choose"}, {"player", "P1"},
+                {"index", static_cast<int>(f["legal"].size()) - 1}, {"decision_id", last}});
+    }
+    EXPECT_GE(kinds.size(), 5u);
+    EXPECT_GT(with_source, 0);
+    EXPECT_GT(with_question, 0);
+}
 
-    // …and once the decision is answered it is gone.
-    c.send({{"type", "choose"}, {"player", "P1"}, {"index", 0}, {"decision_id", id1}});
-    json d2 = c.nextDecision("P1", id1);
-    ASSERT_FALSE(d2.is_null());
-    EXPECT_FALSE(d2.contains("prompt"));
+TEST(PlayServerProtocol, ALogLineNeverBecomesAPrompt) {
+    LiveGame game;
+    Client c;
+    ASSERT_TRUE(c.connect(game.port()));
+    const json d1 = c.nextDecision("P1");
+    ASSERT_FALSE(d1.is_null());
+    game.server->broadcastLog("TRC", "MODE_PROMPT: Choose a mode [Draw | Burn]");
+    c.send({{"type", "request_state"}});
+    EXPECT_EQ(c.nextDecision("P1")["prompt"], d1["prompt"]);
+}
 
-    // A prompt asked of the other seat (answered by the AI, which the server
-    // only hears about through notifyDecisionMade) never reaches P1's frame.
-    game.server->broadcastLog("TRC", "MAY_PROMPT: Pay 1 to draw?");
-    game.server->notifyDecisionMade();
-    EXPECT_FALSE(frame().contains("prompt"));
+TEST(PlayServerProtocol, SpectatorFramesCarryTheHeldDecisionsPrompt) {
+    EventBus events;
+    GameEngine engine{cards().db, events, cards().registry};
+    StateRenderer renderer{cards().db};
+    PlayServerConfig cfg;
+    cfg.port = 0;
+    cfg.spectator = true;
+    cfg.reveal_hidden = true;
+    PlayServer server(engine, renderer, cards().db, std::move(cfg));
+    server.start();
+    RandomAgent ai1{31}, ai2{32};
+    ServedAiSeat seat1{ai1, server}, seat2{ai2, server};
+    engine.on_decision = [&](const GameState&, const std::vector<Intent>& legal,
+                             const Intent& chosen) { server.awaitSpectatorStep(legal, chosen); };
+    std::thread game_thread([&] {
+        engine.runGame(cards().deck1, cards().deck2, seat1, seat2, 20261011);
+    });
+    {
+        Client c;
+        EXPECT_TRUE(c.connect(server.port()));
+        uint64_t last = 0;
+        bool turn_ended = false;
+        for (int i = 0; i < 400 && !::testing::Test::HasFailure(); ++i) {
+            json f = c.readUntil([&](const json& m) {
+                return m["type"] == "decision" && m["decision_id"].get<uint64_t>() > last;
+            });
+            if (f.is_null()) break;
+            last = f["decision_id"].get<uint64_t>();
+            const json& p = f["prompt"];
+            EXPECT_NE(p["kind"], "unspecified") << "decision " << last;
+            EXPECT_EQ(p["decider"], f["player"]);
+            EXPECT_EQ(p["options"].size(), f["legal"].size());
+            // Stop before a decision that is not a rune payment (see above).
+            const int chosen = f["spectator"]["chosen"].get<int>();
+            turn_ended = chosen >= 0 && f["legal"][static_cast<size_t>(chosen)]["type"]
+                                            .get<std::string>().find("EndTurn") != std::string::npos;
+            if (i >= 30 && turn_ended) break;
+            c.send({{"type", "spectator_step"}});
+        }
+        EXPECT_TRUE(turn_ended);
+    }
+    server.requestShutdown();
+    game_thread.join();
+    server.stop();
 }
 
 TEST(PlayServerProtocol, UnknownZoneIsAnErrorNotAMoveToHand) {
@@ -1169,7 +1313,6 @@ TEST(PlayServerShutdown, FirstShutdownEndsASpectatorGameAtTheNextDecision) {
     engine.on_decision = [&](const GameState&, const std::vector<Intent>& legal,
                              const Intent& chosen) {
         server.awaitSpectatorStep(legal, chosen);
-        server.notifyDecisionMade();
     };
     GameResult result;
     std::atomic<bool> done{false};

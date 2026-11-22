@@ -43,7 +43,7 @@ The server builds a separate frame for each seat in use.
 * **Hand**: visible to its owner (and god) only; the others get a count.
 * **Main deck and rune deck**: counts only, except for god, who sees the order (top first).
 * **Face-down cards**: visible to their controller (and god). Everyone else gets `{"back": true, "controller": …}`, with no object id, because ids follow deck order.
-* **Legal actions and the prompt**: only the deciding seat (or god) gets them, since labels can name hand cards.
+* **Legal actions and the prompt's question**: only the deciding seat (or god) gets them, since labels can name hand cards. The other seat is told the kind of decision and the asking card, if it may see it.
 * **Engine log**: god only.
 * **Text view**: the god seat gets the full renderer. A player seat sees its own hand only. The spectator sees no hand. (Found and fixed while testing: before this, every seat's text view printed both hands.)
 * **`choose`**: accepted only for the connection's own player (god may answer for either).
@@ -239,7 +239,7 @@ Tests: 1512 engine tests (1505 + 7 new) and 12 play tests pass.
 
 *Written before the rebase; section 7 says which of these upstream closed.*
 
-* **No question shown for some choices.** Many card choices (`MakeChoice`) arrive without a prompt, with labels like `=0` / `=1`. → PLAY-006 (structured prompts).
+* **No question shown for some choices.** Fixed by PLAY-006: every decision has a heading (its kind and the asking card) and its options have words.
 * **Old clicks are not rejected.** The server does not check `decision_id`. The board guards against double clicks by disabling its buttons. → PLAY-005.
 * **Text labels only.** Actions are still the engine's text labels. There is no drag to play, and no click-a-target-then-confirm flow. → PLAY-007 (action descriptors), then Phase 2 (PLAY-020 to 024).
 * **No move gathering on the board.** Group moves use the two-step engine decision through buttons. → Phase 3 (PLAY-030, 031).

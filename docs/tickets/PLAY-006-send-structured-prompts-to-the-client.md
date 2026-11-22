@@ -2,9 +2,14 @@
 
 - **Priority:** P1
 - **Area:** Phase 0
-- **Status:** todo
+- **Status:** done
 - **Depends on:** [ENG-001](ENG-001-structured-prompt-kind-for-every-choice.md), [PLAY-003](PLAY-003-full-board-state-in-every-frame.md)
 - **Blocks:** [PLAY-023](PLAY-023-pay-costs-by-clicking-runes.md), [PLAY-024](PLAY-024-optional-costs-accelerate-additional-costs-repeat.md), [PLAY-031](PLAY-031-move-several-units-together.md), [PLAY-041](PLAY-041-targeting-on-the-board.md), [PLAY-044](PLAY-044-triggers-modes-x-values-and-card-name-pickers.md), [PLAY-051](PLAY-051-combat-view-and-damage-preview.md), [PLAY-053](PLAY-053-setup-and-mulligan-screens.md)
+
+## Done (2026-11-22)
+`HumanAgent::decide` keeps the engine's `Prompt`, and `buildPromptJson` in `play/src/play_server.cpp` sends `describePrompt` on every decision frame, in the spectator mode too (`ServedAiSeat::decide` passes the prompt on). `last_prompt`, the log scraping and `notifyDecisionMade` are gone. The board shows the kind, the asking card and the question, lists the options in the prompt's order, and tells the waiting seat what the opponent is deciding. Format: [play-api.md](../play-api.md). Tests: `EveryDecisionCarriesItsOwnPrompt`, `ALogLineNeverBecomesAPrompt`, `SpectatorFramesCarryTheHeldDecisionsPrompt`, `FramesAreBuiltPerSeat`, `APromptNamesAHiddenAskingCardOnlyToItsOwner`, `HumanAgent.DecideKeepsThePromptWhileTheEngineWaits`.
+
+Left to later tickets: options have words, not object ids. `legal[].objects` still links an option to the board (PLAY-023, PLAY-041).
 
 ## Why
 The engine now describes every decision (ENG-001, done upstream), but the play server still shows the text it finds in `*_PROMPT:` log lines (`last_prompt` in `play/src/play_server.cpp`), so many choices arrive with no question and labels like `=0` / `=1`.

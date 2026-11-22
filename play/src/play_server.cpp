@@ -11,6 +11,8 @@
 #include "core/game_state.h"
 #include "core/intent.h"
 #include "engine/game_engine.h"
+#include "engine/knowledge_tracker.h"
+#include "engine/prompt_description.h"
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -213,22 +215,15 @@ struct PlayServer::Impl {
 
     StateEditor editor;
 
-    // Most recent prompt-style trace line, captured by broadcastLog as
-    // it streams. Cards / engine emit `<X>_PROMPT: <text>` right before
-    // requesting an agent choice (MAY_PROMPT, X_PROMPT, MODE_PROMPT,
-    // TGT_PROMPT), so it belongs to the next decision anyone makes. It is
-    // attached to every frame of that decision and dropped once the
-    // decision is made, so the UI can show "what are we choosing?"
-    // alongside the otherwise opaque MakeChoice options.
-    std::mutex prompt_mu;
-    std::string last_prompt;
-
     // Spectator gate (see PlayServer::awaitSpectatorStep). The engine
     // thread parks on spec_cv with spec_waiting set; the IO thread wakes
     // it via spectatorStep / setSpectatorAutoplay.
     std::mutex spec_mu;
     std::condition_variable spec_cv;
     std::vector<Intent> spec_legal;
+    Prompt spec_prompt;                  // of spec_legal
+    std::vector<Intent> asked_legal;     // noteAsked, until the gate takes it
+    Prompt asked_prompt;
     int spec_chosen = -1;
     PlayerId spec_player = PlayerId::None;
     uint64_t spec_decision_id = 0;
@@ -282,7 +277,6 @@ struct PlayServer::Impl {
     void sendTo(Audience audience, const std::string& text);
     void broadcastLocked(bool on_engine_thread);
     void broadcast(bool on_engine_thread = false);
-    void clearPrompt();
     void sendAll(const std::string& text);
 
     void runWatcher();
@@ -481,7 +475,6 @@ private:
             return;
         }
         (pid == PlayerId::Player1 ? impl_.answered_p1 : impl_.answered_p2) = park.decision_id;
-        impl_.clearPrompt();
         // The engine is running from here on: tell clients right away so
         // the answered decision's buttons go.
         impl_.broadcastLocked(false);
@@ -857,6 +850,56 @@ json buildLegalActionJson(const CardDB& db,
     return arr;
 }
 
+const char* roleToStr(OptionRole role) {
+    switch (role) {
+        case OptionRole::Action:    return "Action";
+        case OptionRole::Yes:       return "Yes";
+        case OptionRole::No:        return "No";
+        case OptionRole::Value:     return "Value";
+        case OptionRole::Object:    return "Object";
+        case OptionRole::NamedCard: return "NamedCard";
+        case OptionRole::ChainItem: return "ChainItem";
+    }
+    return "Action";
+}
+
+/// What `observer` may be shown of the decision being asked, as the engine
+/// describes it (describePrompt). The question and the options are there only
+/// for the player deciding; anyone else is told who decides, what kind of
+/// decision it is and, if they may see it, the card asking. Options come in
+/// describePrompt's order (by action id), each with its index into `legal`.
+json buildPromptJson(const GameState& state, const CardDB& db, const Prompt& prompt,
+                     const std::vector<Intent>& legal, PlayerId observer) {
+    const PromptDescription d = describePrompt(state, prompt, legal, observer, db);
+    json j = {
+        {"kind", toString(d.kind)},
+        {"decider", playerToStr(prompt.decider)},
+        {"source_card", nullptr},
+    };
+    if (d.has_source && knowledge::identityVisible(state, prompt.source, observer)) {
+        // The observer sees what it is, so its id is in their board, if it is
+        // anywhere on it, and the board can point at it.
+        json source = {
+            {"id", static_cast<int>(prompt.source.raw())},
+            {"name", state.getObject(prompt.source).name.get()},
+        };
+        if (d.source_card != kInvalidId)
+            source["def_id"] = static_cast<int>(d.source_card.raw());
+        j["source_card"] = std::move(source);
+    }
+    if (observer == PlayerId::None) return j;   // a spectator: no "you" to speak to
+    j["text"] = d.text;
+    if (observer != prompt.decider) return j;
+    j["question"] = d.question;
+    json options = json::array();
+    for (const auto& o : d.options)
+        options.push_back({{"index", static_cast<int>(o.index)},
+                           {"role", roleToStr(o.role)},
+                           {"text", o.text}});
+    j["options"] = std::move(options);
+    return j;
+}
+
 json objToJson(const CardDB& db, const GameState& state, GameObjectId oid) {
     const auto& obj = state.getObject(oid);
     std::string name;
@@ -1117,7 +1160,11 @@ json PlayServer::Impl::buildFrameLocked(const Park& park, bool can_read, Audienc
         frame["your_seat"] = audience == SeatP1 ? "P1" : audience == SeatP2 ? "P2" : "";
 
     std::vector<Intent> legal;
-    if (park.kind == Park::Kind::Human && asked_here) legal = park.agent->pendingLegal();
+    Prompt prompt;
+    if (park.kind == Park::Kind::Human) {
+        if (asked_here) legal = park.agent->pendingLegal();
+        prompt = park.agent->pendingPrompt();
+    }
 
     // Spectator mode: the "decision" is the one an AI seat just made,
     // held at the gate until the viewer steps.
@@ -1130,6 +1177,7 @@ json PlayServer::Impl::buildFrameLocked(const Park& park, bool can_read, Audienc
         };
         if (park.kind == Park::Kind::Spectator) {
             legal = spec_legal;
+            prompt = spec_prompt;
             spectator["chosen"] = spec_chosen;
         }
         frame["spectator"] = std::move(spectator);
@@ -1140,9 +1188,13 @@ json PlayServer::Impl::buildFrameLocked(const Park& park, bool can_read, Audienc
                                parent.engine_.state(), legal)
         : json::array();
 
-    if (at_decision && asked_here) {
-        std::lock_guard<std::mutex> lock(prompt_mu);
-        if (!last_prompt.empty()) frame["prompt"] = last_prompt;
+    if (at_decision) {
+        prompt.decider = park.player;
+        const PlayerId observer = asked_here ? park.player
+            : audience == SeatP1 ? PlayerId::Player1
+            : audience == SeatP2 ? PlayerId::Player2 : PlayerId::None;
+        frame["prompt"] = buildPromptJson(parent.engine_.state(), parent.card_db_,
+                                          prompt, legal, observer);
     }
     return frame;
 }
@@ -1174,11 +1226,6 @@ void PlayServer::Impl::broadcastLocked(bool on_engine_thread) {
 void PlayServer::Impl::broadcast(bool on_engine_thread) {
     std::lock_guard<std::mutex> lock(parent.state_mutex_);
     broadcastLocked(on_engine_thread);
-}
-
-void PlayServer::Impl::clearPrompt() {
-    std::lock_guard<std::mutex> lock(prompt_mu);
-    last_prompt.clear();
 }
 
 void PlayServer::Impl::sendAll(const std::string& text) {
@@ -1280,6 +1327,9 @@ void PlayServer::awaitSpectatorStep(const std::vector<Intent>& legal, const Inte
             std::lock_guard<std::mutex> lock(im.spec_mu);
             if (im.spec_released) return;
             im.spec_legal = legal;
+            // What was asked, if this is the decision that was noted (a step
+            // the engine reports without asking has no prompt).
+            im.spec_prompt = im.asked_legal == legal ? im.asked_prompt : Prompt{};
             auto it = std::find(legal.begin(), legal.end(), chosen);
             im.spec_chosen = it == legal.end() ? -1 : static_cast<int>(it - legal.begin());
             im.spec_player = chosen.player;
@@ -1312,7 +1362,6 @@ void PlayServer::awaitSpectatorStep(const std::vector<Intent>& legal, const Inte
         im.spec_waiting = false;
         im.spec_step_requested = false;
     }
-    im.clearPrompt();
     // Clear the held decision so the UI shows "engine busy" while the
     // next agent thinks.
     im.broadcastLocked(true);
@@ -1323,8 +1372,11 @@ void PlayServer::publishEngineState() {
     impl_->broadcast(/*on_engine_thread=*/true);
 }
 
-void PlayServer::notifyDecisionMade() {
-    impl_->clearPrompt();
+void PlayServer::noteAsked(const std::vector<Intent>& legal, const Prompt& prompt) {
+    if (!config_.spectator) return;
+    std::lock_guard<std::mutex> lock(impl_->spec_mu);
+    impl_->asked_legal = legal;
+    impl_->asked_prompt = prompt;
 }
 
 void PlayServer::notifyGameFinished() {
@@ -1472,25 +1524,6 @@ void PlayServer::broadcastLog(const std::string& level, const std::string& messa
 void PlayServer::broadcastLog(const std::string& level, const std::string& message,
                               LogAudience audience) {
     if (!running_.load()) return;
-
-    // Capture *_PROMPT trace lines into impl_->last_prompt so the next
-    // decision frame can render them as a header. Format the engine
-    // uses: "MAY_PROMPT: <text>", "X_PROMPT: <text>", "MODE_PROMPT:
-    // <text> [...]", "TGT_PROMPT: <text> [...]". We strip the prefix
-    // for display and keep the question.
-    // (Captured even when the stream itself is withheld, below: a prompt
-    // only ever heads the decision of the seat it was asked of.)
-    auto pos = message.find("_PROMPT:");
-    if (pos != std::string::npos) {
-        // Trim past the "_PROMPT: " marker (9 chars).
-        std::string prompt = message.substr(pos + 9);
-        // Drop the bracketed option summary at the end if present —
-        // the legal-actions list already shows the options.
-        auto bracket = prompt.rfind(" [");
-        if (bracket != std::string::npos) prompt = prompt.substr(0, bracket);
-        std::lock_guard<std::mutex> lock(impl_->prompt_mu);
-        impl_->last_prompt = std::move(prompt);
-    }
 
     // A line that names a card as it is drawn, mulliganed, hidden or looked
     // at is tagged with the players who may read it (LogEvent::audience).
