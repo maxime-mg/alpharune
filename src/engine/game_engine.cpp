@@ -3451,6 +3451,14 @@ ChainItem GameEngine::choosePrePlayViable(const ChainItem& pre, const PrePlayPay
     const GameState pass_start = state_;
     ++pre_play_state_copies_;
     std::vector<int> script;
+    // Once a player concedes at one of these prompts nobody is asked again:
+    // the rest is chosen in the engine's order (the first payable option),
+    // as askRunesFor finishes a payment.
+    struct GameOver {
+        PlayerId winner;
+        std::string reason;
+    };
+    std::optional<GameOver> ended;
     // A run that throws must not leave the bus quiet.
     struct QuietRun {
         EventBus& bus;
@@ -3527,14 +3535,22 @@ ChainItem GameEngine::choosePrePlayViable(const ChainItem& pre, const PrePlayPay
                 (state_.objectExists(pre.source) ? state_.getObject(pre.source).name
                                                  : std::string("?")) +
                 ": a choice made as it is played";
-        const EffectExecutor::Asking named(*effect_executor_, std::move(asked));
-        const Intent chosen = queryAgentForChain(asked_player, offered);
         int picked = viable.front();
-        for (size_t v = 0; v < offered.size(); ++v)
-            if (offered[v] == chosen && offered[v].choice_label == chosen.choice_label) {
-                picked = viable[v];
-                break;
+        if (!ended) {
+            const EffectExecutor::Asking named(*effect_executor_, std::move(asked));
+            const Intent chosen = queryAgentForChain(asked_player, offered);
+            if (state_.game_over) {
+                // A concession: announced, and the last question. Each later
+                // run starts from pass_start, so it is put back after them.
+                ended = GameOver{state_.winner, state_.game_over_reason};
+            } else {
+                for (size_t v = 0; v < offered.size(); ++v)
+                    if (offered[v] == chosen && offered[v].choice_label == chosen.choice_label) {
+                        picked = viable[v];
+                        break;
+                    }
             }
+        }
         script.push_back(picked);
     }
     // The choices are made: run the pass for real, seen by everyone.
@@ -3544,6 +3560,11 @@ ChainItem GameEngine::choosePrePlayViable(const ChainItem& pre, const PrePlayPay
                                state_.getObject(pre.source).name +
                                " did not complete the choices it had just made (its "
                                "finalize pass is not repeatable)");
+    if (ended && !state_.game_over) {
+        state_.game_over = true;
+        state_.winner = ended->winner;
+        state_.game_over_reason = ended->reason;
+    }
     return final_run.done;
 }
 

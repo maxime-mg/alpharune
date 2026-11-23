@@ -31,6 +31,8 @@ namespace {
 constexpr CardDefId kAnnieFiery{299};   // unit, [5] and one Fury Power
 constexpr CardDefId kDredgeUp{836};     // spell, [2]; [Flow] [2]
 constexpr CardDefId kGold{564};         // "[E], kill this: [Add] [A]"
+constexpr CardDefId kChallenge{128};    // spell, [2] + 1 Power: a friendly and an enemy unit
+constexpr CardDefId kIreliaGraceful{462};   // "Your spells that choose me cost [1] or [A] less."
 constexpr int kTooOften = 1000;
 
 /// Answers like `inner` until the first prompt of kind `kind`, concedes there
@@ -182,6 +184,24 @@ TEST_F(ConcedeInPaymentTest, AtAnAddForPaymentPrompt) {
     }, &p1);
     expectP1Conceded(p1);
     EXPECT_TRUE(paid);
+}
+
+// GameEngine::choosePrePlayViable: a spell payable only through what it
+// chooses (Challenge, [2] + 1 Power, one off for choosing an Irelia) asks its
+// choices on a copy of the game rewound before each one. A concession there
+// used to be rewound with it: announced, and the game went on.
+TEST_F(ConcedeInPaymentTest, AtAChoiceOfASpellPayableThroughIt) {
+    addUnit(PlayerId::Player1, kIreliaGraceful, 3, 0);
+    addUnit(PlayerId::Player1, kIreliaGraceful, 3, 0);
+    addUnit(PlayerId::Player2, kInvalidId, 9, 0);
+    withEngine([](GameEngine& e) { e.testHook_cleanup(); });
+    const auto spell = addToHand(PlayerId::Player1, kChallenge);
+    state.player(PlayerId::Player1).rune_pool = RunePool{};
+    state.player(PlayerId::Player1).rune_pool.energy = 1;
+    state.player(PlayerId::Player1).rune_pool.universal_power = 1;
+    ConcedesAt p1(PlayerId::Player1, PromptKind::TargetFirst);
+    playThroughEngine(spell, &p1, std::nullopt, nullptr, /*fund=*/false);
+    expectP1Conceded(p1);
 }
 
 // Whole games: the engine's own turn loop returns, whichever seat concedes.
